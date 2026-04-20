@@ -1,33 +1,46 @@
 import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
 import { ArrowLeft, Save } from 'lucide-react';
+import type { Group } from '@/types';
 
 export function ContestCreatePage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [scoringType, setScoringType] = useState('icpc');
+  const [scoringType, setScoringType] = useState<'icpc' | 'ioi'>('icpc');
   const [startTime, setStartTime] = useState('');
   const [endTime, setEndTime] = useState('');
-  const [isPublic, setIsPublic] = useState(true);
-  const [freezeMinutes, setFreezeMinutes] = useState(60);
-  const [penaltySeconds, setPenaltySeconds] = useState(1200);
+  const [isRated, setIsRated] = useState(true);
+  const [freezeMinutes, setFreezeMinutes] = useState<number>(0);
+  const [penaltySeconds, setPenaltySeconds] = useState<number>(1200);
   const [allowVirtual, setAllowVirtual] = useState(false);
+  const [groupId, setGroupId] = useState<string>('');
+  const [proctored, setProctored] = useState(false);
+  const [gradeVisibility, setGradeVisibility] = useState<'private' | 'group'>('private');
   const [error, setError] = useState('');
+
+  // Fetch available groups for group-based contests
+  const { data: groupsData } = useQuery({
+    queryKey: ['admin', 'groups-options'],
+    queryFn: () => apiClient.get<{ groups: Group[] }>(`/groups`),
+  });
+  const groups = groupsData?.groups ?? [];
 
   const createMutation = useMutation({
     mutationFn: (payload: Record<string, unknown>) =>
-      apiClient.post<{ id: string }>('/admin/contests', payload),
+      apiClient.post<{ id: number }>('/admin/contests', payload),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'contests'] });
       navigate(`/contests/${data.id}`);
     },
     onError: (err) => setError(err instanceof Error ? err.message : 'Failed to create contest'),
   });
+
+  const isGroupContest = groupId !== '';
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -38,15 +51,19 @@ export function ContestCreatePage() {
       scoring_type: scoringType,
       start_time: new Date(startTime).toISOString(),
       end_time: new Date(endTime).toISOString(),
-      is_public: isPublic,
-      freeze_time_minutes: freezeMinutes || null,
+      // Group contests are forced unrated server-side; reflect that here.
+      is_rated: isGroupContest ? false : isRated,
+      freeze_time_minutes: freezeMinutes > 0 ? freezeMinutes : null,
       penalty_time_seconds: penaltySeconds,
       allow_virtual: allowVirtual,
+      group_id: isGroupContest ? Number(groupId) : null,
+      proctored,
+      grade_visibility: gradeVisibility,
     });
   };
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
+    <div className="mx-auto max-w-3xl space-y-6">
       <div className="flex items-center gap-3">
         <button
           onClick={() => navigate('/contests')}
@@ -88,7 +105,7 @@ export function ContestCreatePage() {
             <label className="mb-1 block text-sm font-medium text-text-muted">Scoring Type</label>
             <select
               value={scoringType}
-              onChange={(e) => setScoringType(e.target.value)}
+              onChange={(e) => setScoringType(e.target.value as 'icpc' | 'ioi')}
               className="w-full rounded-lg border border-border bg-panel px-3 py-2 text-sm text-text outline-none focus:border-accent"
             >
               <option value="icpc">ICPC</option>
@@ -140,15 +157,52 @@ export function ContestCreatePage() {
               className="w-full rounded-lg border border-border bg-panel px-3 py-2 text-sm text-text outline-none focus:border-accent"
             />
           </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-text-muted">
+              Associate with Group (optional)
+            </label>
+            <select
+              value={groupId}
+              onChange={(e) => setGroupId(e.target.value)}
+              className="w-full rounded-lg border border-border bg-panel px-3 py-2 text-sm text-text outline-none focus:border-accent"
+            >
+              <option value="">— None (global contest) —</option>
+              {groups.map((g) => (
+                <option key={g.id} value={g.id}>
+                  {g.name}
+                </option>
+              ))}
+            </select>
+            {isGroupContest && (
+              <p className="mt-1 text-xs text-text-muted">
+                Group contests are unrated and visible only to group members.
+              </p>
+            )}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="mb-1 block text-sm font-medium text-text-muted">Grade Visibility</label>
+            <select
+              value={gradeVisibility}
+              onChange={(e) => setGradeVisibility(e.target.value as 'private' | 'group')}
+              className="w-full rounded-lg border border-border bg-panel px-3 py-2 text-sm text-text outline-none focus:border-accent"
+            >
+              <option value="private">Private — only students see their own grades</option>
+              <option value="group">Group — all participants see all grades</option>
+            </select>
+          </div>
           <div className="flex flex-col justify-end gap-3">
-            <label className="flex items-center gap-2 text-sm text-text-muted">
+            <label className={cn('flex items-center gap-2 text-sm', isGroupContest ? 'text-text-muted/40' : 'text-text-muted')}>
               <input
                 type="checkbox"
-                checked={isPublic}
-                onChange={(e) => setIsPublic(e.target.checked)}
+                checked={isRated}
+                onChange={(e) => setIsRated(e.target.checked)}
+                disabled={isGroupContest}
                 className="rounded"
               />
-              Public contest
+              Rated contest
             </label>
             <label className="flex items-center gap-2 text-sm text-text-muted">
               <input
@@ -158,6 +212,15 @@ export function ContestCreatePage() {
                 className="rounded"
               />
               Allow virtual participation
+            </label>
+            <label className="flex items-center gap-2 text-sm text-text-muted">
+              <input
+                type="checkbox"
+                checked={proctored}
+                onChange={(e) => setProctored(e.target.checked)}
+                className="rounded"
+              />
+              Proctored mode (detect tab/fullscreen exits)
             </label>
           </div>
         </div>

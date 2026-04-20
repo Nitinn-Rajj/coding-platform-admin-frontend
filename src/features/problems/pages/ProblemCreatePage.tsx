@@ -4,15 +4,17 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 import { ArrowLeft, Save } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import type { ProblemType } from '@/types';
 
 interface CreateProblemPayload {
   title: string;
   slug: string;
-  description: string;
+  statement: string;
   difficulty: string;
   time_limit_ms: number;
-  memory_limit_kb: number;
-  tags: string[];
+  memory_limit_mb: number;
+  problem_type: ProblemType;
+  points?: number | null;
 }
 
 export function ProblemCreatePage() {
@@ -20,16 +22,17 @@ export function ProblemCreatePage() {
   const queryClient = useQueryClient();
   const [title, setTitle] = useState('');
   const [slug, setSlug] = useState('');
-  const [description, setDescription] = useState('');
+  const [statement, setStatement] = useState('');
   const [difficulty, setDifficulty] = useState('medium');
   const [timeLimit, setTimeLimit] = useState(2000);
-  const [memoryLimit, setMemoryLimit] = useState(262144);
-  const [tagsInput, setTagsInput] = useState('');
+  const [memoryLimit, setMemoryLimit] = useState(256);
+  const [problemType, setProblemType] = useState<ProblemType>('standard');
+  const [points, setPoints] = useState<number | ''>('');
   const [error, setError] = useState('');
 
   const createMutation = useMutation({
     mutationFn: (payload: CreateProblemPayload) =>
-      apiClient.post<{ id: string }>('/admin/problems', payload),
+      apiClient.post<{ id: number }>('/admin/problems', payload),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'problems'] });
       navigate(`/problems/${data.id}`);
@@ -39,7 +42,6 @@ export function ProblemCreatePage() {
 
   const handleTitleChange = (value: string) => {
     setTitle(value);
-    // Auto-generate slug from title
     setSlug(
       value
         .toLowerCase()
@@ -53,24 +55,20 @@ export function ProblemCreatePage() {
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     setError('');
-    const tags = tagsInput
-      .split(',')
-      .map((t) => t.trim())
-      .filter(Boolean);
     createMutation.mutate({
       title,
       slug,
-      description,
+      statement,
       difficulty,
       time_limit_ms: timeLimit,
-      memory_limit_kb: memoryLimit,
-      tags,
+      memory_limit_mb: memoryLimit,
+      problem_type: problemType,
+      points: points === '' ? null : Number(points),
     });
   };
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
-      {/* Header */}
       <div className="flex items-center gap-3">
         <button
           onClick={() => navigate('/problems')}
@@ -88,7 +86,6 @@ export function ProblemCreatePage() {
       )}
 
       <form onSubmit={handleSubmit} className="space-y-5">
-        {/* Title */}
         <div>
           <label className="mb-1 block text-sm font-medium text-text-muted">Title</label>
           <input
@@ -100,7 +97,6 @@ export function ProblemCreatePage() {
           />
         </div>
 
-        {/* Slug */}
         <div>
           <label className="mb-1 block text-sm font-medium text-text-muted">Slug</label>
           <input
@@ -112,19 +108,53 @@ export function ProblemCreatePage() {
           />
         </div>
 
-        {/* Description */}
         <div>
-          <label className="mb-1 block text-sm font-medium text-text-muted">Description (Markdown)</label>
+          <label className="mb-1 block text-sm font-medium text-text-muted">Problem Type</label>
+          <div className="flex gap-3">
+            <label className={cn(
+              'flex-1 cursor-pointer rounded-lg border p-3 text-sm',
+              problemType === 'standard'
+                ? 'border-accent bg-accent-subtle/30 text-text'
+                : 'border-border bg-panel text-text-muted hover:border-accent/30',
+            )}>
+              <input
+                type="radio"
+                checked={problemType === 'standard'}
+                onChange={() => setProblemType('standard')}
+                className="mr-2"
+              />
+              <span className="font-medium">Standard</span>
+              <p className="mt-1 text-xs">Auto-judged against test cases.</p>
+            </label>
+            <label className={cn(
+              'flex-1 cursor-pointer rounded-lg border p-3 text-sm',
+              problemType === 'subjective'
+                ? 'border-accent bg-accent-subtle/30 text-text'
+                : 'border-border bg-panel text-text-muted hover:border-accent/30',
+            )}>
+              <input
+                type="radio"
+                checked={problemType === 'subjective'}
+                onChange={() => setProblemType('subjective')}
+                className="mr-2"
+              />
+              <span className="font-medium">Subjective</span>
+              <p className="mt-1 text-xs">Manually reviewed by an admin.</p>
+            </label>
+          </div>
+        </div>
+
+        <div>
+          <label className="mb-1 block text-sm font-medium text-text-muted">Statement (Markdown)</label>
           <textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
+            value={statement}
+            onChange={(e) => setStatement(e.target.value)}
             rows={10}
             className="w-full rounded-lg border border-border bg-panel px-3 py-2 text-sm text-text outline-none focus:border-accent font-mono"
             placeholder="## Problem Statement&#10;&#10;Given an array of integers..."
           />
         </div>
 
-        {/* Difficulty + Limits row */}
         <div className="grid grid-cols-3 gap-4">
           <div>
             <label className="mb-1 block text-sm font-medium text-text-muted">Difficulty</label>
@@ -146,33 +176,36 @@ export function ProblemCreatePage() {
               onChange={(e) => setTimeLimit(Number(e.target.value))}
               min={100}
               max={10000}
-              className="w-full rounded-lg border border-border bg-panel px-3 py-2 text-sm text-text outline-none focus:border-accent"
+              disabled={problemType === 'subjective'}
+              className="w-full rounded-lg border border-border bg-panel px-3 py-2 text-sm text-text outline-none focus:border-accent disabled:opacity-60"
             />
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium text-text-muted">Memory Limit (KB)</label>
+            <label className="mb-1 block text-sm font-medium text-text-muted">Memory Limit (MB)</label>
             <input
               type="number"
               value={memoryLimit}
               onChange={(e) => setMemoryLimit(Number(e.target.value))}
-              min={16384}
-              className="w-full rounded-lg border border-border bg-panel px-3 py-2 text-sm text-text outline-none focus:border-accent"
+              min={16}
+              disabled={problemType === 'subjective'}
+              className="w-full rounded-lg border border-border bg-panel px-3 py-2 text-sm text-text outline-none focus:border-accent disabled:opacity-60"
             />
           </div>
         </div>
 
-        {/* Tags */}
         <div>
-          <label className="mb-1 block text-sm font-medium text-text-muted">Tags (comma-separated)</label>
+          <label className="mb-1 block text-sm font-medium text-text-muted">
+            Default Points (optional, used as default in contests)
+          </label>
           <input
-            value={tagsInput}
-            onChange={(e) => setTagsInput(e.target.value)}
+            type="number"
+            value={points}
+            onChange={(e) => setPoints(e.target.value === '' ? '' : Number(e.target.value))}
             className="w-full rounded-lg border border-border bg-panel px-3 py-2 text-sm text-text outline-none focus:border-accent"
-            placeholder="arrays, hash-table, two-pointers"
+            placeholder="100"
           />
         </div>
 
-        {/* Submit */}
         <div className="flex justify-end">
           <button
             type="submit"

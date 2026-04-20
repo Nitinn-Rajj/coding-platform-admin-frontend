@@ -4,6 +4,8 @@ import {
   FileText,
   Trophy,
   Users,
+  UsersRound,
+  ClipboardCheck,
   ScrollText,
   Sun,
   Moon,
@@ -28,6 +30,8 @@ const navItems: NavItem[] = [
   { label: 'Dashboard', to: '/', icon: <LayoutDashboard size={18} /> },
   { label: 'Problems', to: '/problems', icon: <FileText size={18} /> },
   { label: 'Contests', to: '/contests', icon: <Trophy size={18} /> },
+  { label: 'Groups', to: '/groups', icon: <UsersRound size={18} /> },
+  { label: 'Submissions', to: '/submissions', icon: <ClipboardCheck size={18} /> },
   { label: 'Users', to: '/users', icon: <Users size={18} />, roles: ['admin'] },
   { label: 'Audit Log', to: '/audit-log', icon: <ScrollText size={18} />, roles: ['admin'] },
 ];

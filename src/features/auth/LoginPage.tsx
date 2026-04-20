@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils';
 import { Lock, User, AlertCircle, Shield } from 'lucide-react';
 
 export function LoginPage() {
-  const [username, setUsername] = useState('');
+  const [loginId, setLoginId] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -17,7 +17,7 @@ export function LoginPage() {
     setError('');
     setLoading(true);
     try {
-      await login(username, password);
+      await login(loginId, password);
       navigate('/');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed');
@@ -49,19 +49,20 @@ export function LoginPage() {
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label htmlFor="username" className="mb-1 block text-sm font-medium text-text-muted">
-              Username
+            <label htmlFor="login" className="mb-1 block text-sm font-medium text-text-muted">
+              Username or Email
             </label>
             <div className="relative">
               <User size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
               <input
-                id="username"
+                id="login"
                 type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
+                value={loginId}
+                onChange={(e) => setLoginId(e.target.value)}
                 required
+                autoComplete="username"
                 className="w-full rounded-lg border border-border bg-panel py-2 pl-10 pr-3 text-sm text-text placeholder:text-text-muted/50 outline-none focus:border-accent transition-colors"
-                placeholder="Enter username"
+                placeholder="Enter username or email"
               />
             </div>
           </div>

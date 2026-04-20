@@ -9,6 +9,11 @@ import { ProblemEditorPage } from '@/features/problems/pages/ProblemEditorPage';
 import { ContestListPage } from '@/features/contests/pages/ContestListPage';
 import { ContestCreatePage } from '@/features/contests/pages/ContestCreatePage';
 import { ContestEditorPage } from '@/features/contests/pages/ContestEditorPage';
+import { GroupListPage } from '@/features/groups/pages/GroupListPage';
+import { GroupCreatePage } from '@/features/groups/pages/GroupCreatePage';
+import { GroupDetailPage } from '@/features/groups/pages/GroupDetailPage';
+import { SubmissionListPage } from '@/features/submissions/pages/SubmissionListPage';
+import { SubmissionDetailPage } from '@/features/submissions/pages/SubmissionDetailPage';
 import { UserManagementPage } from '@/features/users/pages/UserManagementPage';
 import { AuditLogPage } from '@/features/audit/pages/AuditLogPage';
 
@@ -35,6 +40,13 @@ const router = createBrowserRouter([
           { path: '/contests', element: <ContestListPage /> },
           { path: '/contests/new', element: <ContestCreatePage /> },
           { path: '/contests/:id', element: <ContestEditorPage /> },
+          // Groups
+          { path: '/groups', element: <GroupListPage /> },
+          { path: '/groups/new', element: <GroupCreatePage /> },
+          { path: '/groups/:id', element: <GroupDetailPage /> },
+          // Submissions
+          { path: '/submissions', element: <SubmissionListPage /> },
+          { path: '/submissions/:id', element: <SubmissionDetailPage /> },
           // Users (admin only)
           { path: '/users', element: <UserManagementPage /> },
           // Audit log (admin only)

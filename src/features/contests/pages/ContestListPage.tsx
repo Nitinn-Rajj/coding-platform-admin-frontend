@@ -1,15 +1,16 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { apiClient } from '@/lib/api-client';
+import { apiClient, buildQueryString } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
-import { Plus, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, ChevronLeft, ChevronRight, Lock, Users } from 'lucide-react';
 import type { Contest, PaginatedResponse } from '@/types';
 
 const statusColors: Record<string, string> = {
   draft: 'bg-text-muted/15 text-text-muted',
   upcoming: 'bg-accent-subtle text-accent',
   running: 'bg-success/15 text-success',
+  live: 'bg-success/15 text-success',
   ended: 'bg-warning/15 text-warning',
   finalized: 'bg-bg-secondary text-text-muted',
 };
@@ -24,13 +25,13 @@ export function ContestListPage() {
     queryKey: ['admin', 'contests', page, statusFilter],
     queryFn: () =>
       apiClient.get<PaginatedResponse<Contest>>(
-        `/admin/contests?page=${page}&limit=${limit}${statusFilter ? `&status=${statusFilter}` : ''}`,
+        `/admin/contests${buildQueryString({ page, status: statusFilter })}`,
       ),
   });
 
   const contests = data?.data ?? [];
   const total = data?.total ?? 0;
-  const totalPages = Math.ceil(total / limit);
+  const totalPages = data?.pages ?? Math.ceil(total / limit);
 
   return (
     <div className="space-y-4">
@@ -44,7 +45,6 @@ export function ContestListPage() {
         </button>
       </div>
 
-      {/* Filters */}
       <div className="flex items-center gap-2">
         <select
           value={statusFilter}
@@ -60,7 +60,6 @@ export function ContestListPage() {
         </select>
       </div>
 
-      {/* Table */}
       <div className="overflow-x-auto rounded-xl border border-border">
         <table className="w-full text-sm">
           <thead>
@@ -68,8 +67,9 @@ export function ContestListPage() {
               <th className="px-4 py-3 text-left font-medium text-text-muted">Title</th>
               <th className="px-4 py-3 text-left font-medium text-text-muted">Status</th>
               <th className="px-4 py-3 text-left font-medium text-text-muted">Scoring</th>
+              <th className="px-4 py-3 text-left font-medium text-text-muted">Group</th>
+              <th className="px-4 py-3 text-left font-medium text-text-muted">Flags</th>
               <th className="px-4 py-3 text-left font-medium text-text-muted">Start</th>
-              <th className="px-4 py-3 text-left font-medium text-text-muted">Duration</th>
               <th className="px-4 py-3 text-left font-medium text-text-muted">Problems</th>
               <th className="px-4 py-3 text-left font-medium text-text-muted">Participants</th>
             </tr>
@@ -77,12 +77,12 @@ export function ContestListPage() {
           <tbody>
             {isLoading && (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-text-muted">Loading...</td>
+                <td colSpan={8} className="px-4 py-8 text-center text-text-muted">Loading...</td>
               </tr>
             )}
             {!isLoading && contests.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-text-muted">No contests found</td>
+                <td colSpan={8} className="px-4 py-8 text-center text-text-muted">No contests found</td>
               </tr>
             )}
             {contests.map((c) => (
@@ -99,18 +99,42 @@ export function ContestListPage() {
                 </td>
                 <td className="px-4 py-3 uppercase text-text-muted">{c.scoring_type}</td>
                 <td className="px-4 py-3 text-text-muted">
-                  {new Date(c.start_time).toLocaleDateString()}
+                  {c.group_id ? (
+                    <span className="inline-flex items-center gap-1 rounded bg-accent-subtle/50 px-1.5 py-0.5 text-xs text-accent">
+                      <Users size={12} /> {c.group_name || `#${c.group_id}`}
+                    </span>
+                  ) : (
+                    <span className="text-text-muted/60">global</span>
+                  )}
                 </td>
-                <td className="px-4 py-3 text-text-muted">{c.duration_minutes}m</td>
-                <td className="px-4 py-3 text-text-muted">{c.problems_count}</td>
-                <td className="px-4 py-3 text-text-muted">{c.participants_count}</td>
+                <td className="px-4 py-3">
+                  <div className="flex items-center gap-1">
+                    {c.proctored && (
+                      <span className="inline-flex items-center gap-0.5 rounded bg-warning/10 px-1.5 py-0.5 text-xs text-warning">
+                        <Lock size={10} /> proc
+                      </span>
+                    )}
+                    {c.is_rated && (
+                      <span className="rounded bg-success/10 px-1.5 py-0.5 text-xs text-success">
+                        rated
+                      </span>
+                    )}
+                    <span className="rounded bg-bg-secondary px-1.5 py-0.5 text-xs text-text-muted">
+                      {c.grade_visibility}
+                    </span>
+                  </div>
+                </td>
+                <td className="px-4 py-3 text-text-muted">
+                  {new Date(c.start_time).toLocaleString()}
+                </td>
+                <td className="px-4 py-3 text-text-muted">{c.problem_count}</td>
+                <td className="px-4 py-3 text-text-muted">{c.participant_count}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
 
-      {/* Pagination */}
       {totalPages > 1 && (
         <div className="flex items-center justify-between">
           <p className="text-sm text-text-muted">

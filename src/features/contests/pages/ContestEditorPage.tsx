@@ -1,24 +1,32 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { apiClient } from '@/lib/api-client';
+import { apiClient, buildQueryString } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
-import { ArrowLeft, Save, Plus, Trash2, Globe, CheckCircle, Settings } from 'lucide-react';
-import type { Contest, ContestProblem } from '@/types';
+import {
+  ArrowLeft, Save, Plus, Trash2, Globe, CheckCircle, Settings,
+  Shield, FileDown, ListChecks,
+} from 'lucide-react';
+import type {
+  Contest, ContestProblem, Group,
+  ProctorEvent, ProctorUserSummary,
+} from '@/types';
+
+type Tab = 'settings' | 'problems' | 'proctor';
 
 export function ContestEditorPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState<'settings' | 'problems'>('settings');
+  const [activeTab, setActiveTab] = useState<Tab>('settings');
   const [showAddProblem, setShowAddProblem] = useState(false);
   const [addProblemId, setAddProblemId] = useState('');
-  const [addLabel, setAddLabel] = useState('');
   const [addMaxPoints, setAddMaxPoints] = useState(100);
+  const [addScoringMode, setAddScoringMode] = useState<'all_or_nothing' | 'partial'>('all_or_nothing');
 
   const { data: contest, isLoading } = useQuery({
     queryKey: ['admin', 'contest', id],
-    queryFn: () => apiClient.get<Contest & { problems: ContestProblem[] }>(`/admin/contests/${id}`),
+    queryFn: () => apiClient.get<Contest>(`/admin/contests/${id}`),
     enabled: !!id,
   });
 
@@ -39,21 +47,34 @@ export function ContestEditorPage() {
   });
 
   const addProblemMutation = useMutation({
-    mutationFn: (payload: { problem_id: string; label: string; order_index: number; max_points: number }) =>
-      apiClient.post(`/admin/contests/${id}/problems`, payload),
+    mutationFn: (payload: {
+      problem_id: number; max_points: number; problem_order: number; scoring_mode: string;
+    }) => apiClient.post(`/admin/contests/${id}/problems`, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'contest', id] });
       setShowAddProblem(false);
       setAddProblemId('');
-      setAddLabel('');
     },
   });
 
   const removeProblemMutation = useMutation({
-    mutationFn: (cpId: string) =>
+    mutationFn: (cpId: number) =>
       apiClient.delete(`/admin/contests/${id}/problems/${cpId}`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin', 'contest', id] }),
   });
+
+  const handleExportCSV = async () => {
+    if (!contest) return;
+    try {
+      const safeName = contest.title.replace(/[^a-z0-9]+/gi, '_').toLowerCase();
+      await apiClient.download(
+        `/admin/contests/${contest.id}/export.csv`,
+        `contest_${contest.id}_${safeName}.csv`,
+      );
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Export failed');
+    }
+  };
 
   if (isLoading) {
     return <p className="py-20 text-center text-text-muted">Loading contest...</p>;
@@ -63,7 +84,7 @@ export function ContestEditorPage() {
     return <p className="py-20 text-center text-error">Contest not found</p>;
   }
 
-  const problems: ContestProblem[] = (contest as Contest & { problems: ContestProblem[] }).problems ?? [];
+  const problems: ContestProblem[] = contest.problems ?? [];
 
   return (
     <div className="space-y-4">
@@ -78,12 +99,20 @@ export function ContestEditorPage() {
           </button>
           <div>
             <h1 className="text-xl font-semibold text-text">{contest.title}</h1>
-            <p className="text-xs text-text-muted capitalize">
+            <p className="text-xs text-text-muted">
               {contest.status} · {contest.scoring_type.toUpperCase()}
+              {contest.group_name && <> · group: <span className="text-accent">{contest.group_name}</span></>}
+              {contest.proctored && <> · <span className="text-warning">proctored</span></>}
             </p>
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={handleExportCSV}
+            className="flex items-center gap-1.5 rounded-lg border border-border bg-panel px-3 py-1.5 text-sm text-text hover:bg-accent-subtle/50"
+          >
+            <FileDown size={14} /> Export CSV
+          </button>
           {contest.status === 'draft' && (
             <button
               onClick={() => { if (confirm('Publish this contest?')) publishMutation.mutate(); }}
@@ -107,27 +136,19 @@ export function ContestEditorPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-border pb-px">
-        <button
-          onClick={() => setActiveTab('settings')}
-          className={cn(
-            'whitespace-nowrap rounded-t-lg px-3 py-2 text-sm font-medium',
-            activeTab === 'settings' ? 'border-b-2 border-accent text-accent' : 'text-text-muted hover:text-text',
-          )}
-        >
+        <TabButton active={activeTab === 'settings'} onClick={() => setActiveTab('settings')}>
           <Settings size={14} className="mr-1 inline" /> Settings
-        </button>
-        <button
-          onClick={() => setActiveTab('problems')}
-          className={cn(
-            'whitespace-nowrap rounded-t-lg px-3 py-2 text-sm font-medium',
-            activeTab === 'problems' ? 'border-b-2 border-accent text-accent' : 'text-text-muted hover:text-text',
-          )}
-        >
-          Problems ({problems.length})
-        </button>
+        </TabButton>
+        <TabButton active={activeTab === 'problems'} onClick={() => setActiveTab('problems')}>
+          <ListChecks size={14} className="mr-1 inline" /> Problems ({problems.length})
+        </TabButton>
+        {contest.proctored && (
+          <TabButton active={activeTab === 'proctor'} onClick={() => setActiveTab('proctor')}>
+            <Shield size={14} className="mr-1 inline" /> Proctoring
+          </TabButton>
+        )}
       </div>
 
-      {/* Settings Tab */}
       {activeTab === 'settings' && (
         <ContestSettingsForm
           contest={contest}
@@ -137,7 +158,6 @@ export function ContestEditorPage() {
         />
       )}
 
-      {/* Problems Tab */}
       {activeTab === 'problems' && (
         <div className="space-y-4">
           <div className="flex items-center gap-2">
@@ -158,16 +178,7 @@ export function ContestEditorPage() {
                   <input
                     value={addProblemId}
                     onChange={(e) => setAddProblemId(e.target.value)}
-                    placeholder="UUID"
-                    className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm text-text outline-none focus:border-accent"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs text-text-muted">Label</label>
-                  <input
-                    value={addLabel}
-                    onChange={(e) => setAddLabel(e.target.value)}
-                    placeholder="A"
+                    placeholder="123"
                     className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm text-text outline-none focus:border-accent"
                   />
                 </div>
@@ -180,14 +191,25 @@ export function ContestEditorPage() {
                     className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm text-text outline-none focus:border-accent"
                   />
                 </div>
+                <div>
+                  <label className="mb-1 block text-xs text-text-muted">Scoring Mode</label>
+                  <select
+                    value={addScoringMode}
+                    onChange={(e) => setAddScoringMode(e.target.value as 'all_or_nothing' | 'partial')}
+                    className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm text-text outline-none focus:border-accent"
+                  >
+                    <option value="all_or_nothing">All-or-nothing</option>
+                    <option value="partial">Partial (per test case)</option>
+                  </select>
+                </div>
               </div>
               <button
                 onClick={() =>
                   addProblemMutation.mutate({
-                    problem_id: addProblemId,
-                    label: addLabel,
-                    order_index: problems.length,
+                    problem_id: Number(addProblemId),
                     max_points: addMaxPoints,
+                    problem_order: problems.length,
+                    scoring_mode: addScoringMode,
                   })
                 }
                 disabled={addProblemMutation.isPending || !addProblemId}
@@ -198,23 +220,31 @@ export function ContestEditorPage() {
             </div>
           )}
 
-          {/* Problem list */}
           <div className="overflow-x-auto rounded-xl border border-border">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border bg-bg-secondary">
-                  <th className="px-4 py-3 text-left font-medium text-text-muted">Label</th>
+                  <th className="px-4 py-3 text-left font-medium text-text-muted">#</th>
                   <th className="px-4 py-3 text-left font-medium text-text-muted">Problem</th>
+                  <th className="px-4 py-3 text-left font-medium text-text-muted">Type</th>
                   <th className="px-4 py-3 text-left font-medium text-text-muted">Max Points</th>
+                  <th className="px-4 py-3 text-left font-medium text-text-muted">Scoring Mode</th>
                   <th className="px-4 py-3 text-right font-medium text-text-muted">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {problems.map((cp) => (
                   <tr key={cp.id} className="border-b border-border last:border-0">
-                    <td className="px-4 py-3 font-bold text-accent">{cp.label}</td>
-                    <td className="px-4 py-3 text-text">{cp.problem_title || cp.problem_id}</td>
+                    <td className="px-4 py-3 font-bold text-accent">{cp.problem_order + 1}</td>
+                    <td className="px-4 py-3 text-text">
+                      <p className="font-medium">{cp.title}</p>
+                      <p className="text-xs text-text-muted">{cp.slug}</p>
+                    </td>
+                    <td className="px-4 py-3 text-text-muted capitalize">{cp.problem_type}</td>
                     <td className="px-4 py-3 text-text-muted">{cp.max_points}</td>
+                    <td className="px-4 py-3 text-text-muted">
+                      {cp.scoring_mode === 'partial' ? 'Partial' : 'All-or-nothing'}
+                    </td>
                     <td className="px-4 py-3 text-right">
                       <button
                         onClick={() => {
@@ -229,7 +259,7 @@ export function ContestEditorPage() {
                 ))}
                 {problems.length === 0 && (
                   <tr>
-                    <td colSpan={4} className="px-4 py-6 text-center text-text-muted">No problems added yet</td>
+                    <td colSpan={6} className="px-4 py-6 text-center text-text-muted">No problems added yet</td>
                   </tr>
                 )}
               </tbody>
@@ -237,16 +267,33 @@ export function ContestEditorPage() {
           </div>
         </div>
       )}
+
+      {activeTab === 'proctor' && contest.proctored && (
+        <ProctorPanel contestId={contest.id} />
+      )}
     </div>
+  );
+}
+
+function TabButton({
+  active, onClick, children,
+}: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        'whitespace-nowrap rounded-t-lg px-3 py-2 text-sm font-medium',
+        active ? 'border-b-2 border-accent text-accent' : 'text-text-muted hover:text-text',
+      )}
+    >
+      {children}
+    </button>
   );
 }
 
 /* ─── Contest Settings Form ─── */
 function ContestSettingsForm({
-  contest,
-  onSave,
-  isPending,
-  isSuccess,
+  contest, onSave, isPending, isSuccess,
 }: {
   contest: Contest;
   onSave: (payload: Record<string, unknown>) => void;
@@ -254,26 +301,45 @@ function ContestSettingsForm({
   isSuccess: boolean;
 }) {
   const [title, setTitle] = useState(contest.title);
-  const [description, setDescription] = useState(contest.description);
+  const [description, setDescription] = useState(contest.description ?? '');
   const [startTime, setStartTime] = useState(contest.start_time.slice(0, 16));
   const [endTime, setEndTime] = useState(contest.end_time.slice(0, 16));
-  const [isPublic, setIsPublic] = useState(contest.is_public);
+  const [isRated, setIsRated] = useState(contest.is_rated);
   const [freezeMinutes, setFreezeMinutes] = useState(contest.freeze_time_minutes ?? 0);
-  const [penaltySeconds, setPenaltySeconds] = useState(contest.penalty_time_seconds);
-  const [allowVirtual, setAllowVirtual] = useState(contest.allow_virtual);
+  const [penaltySeconds, setPenaltySeconds] = useState(contest.penalty_time_seconds ?? 0);
+  const [allowVirtual, setAllowVirtual] = useState(contest.allow_virtual ?? false);
+  const [groupId, setGroupId] = useState<string>(contest.group_id ? String(contest.group_id) : '');
+  const [proctored, setProctored] = useState(contest.proctored);
+  const [gradeVisibility, setGradeVisibility] = useState<'private' | 'group'>(contest.grade_visibility);
+
+  const { data: groupsData } = useQuery({
+    queryKey: ['admin', 'groups-options'],
+    queryFn: () => apiClient.get<{ groups: Group[] }>(`/groups`),
+  });
+  const groups = groupsData?.groups ?? [];
+
+  const isGroupContest = groupId !== '';
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSave({
+    const payload: Record<string, unknown> = {
       title,
       description,
       start_time: new Date(startTime).toISOString(),
       end_time: new Date(endTime).toISOString(),
-      is_public: isPublic,
-      freeze_time_minutes: freezeMinutes || null,
+      is_rated: isGroupContest ? false : isRated,
+      freeze_time_minutes: freezeMinutes > 0 ? freezeMinutes : null,
       penalty_time_seconds: penaltySeconds,
       allow_virtual: allowVirtual,
-    });
+      proctored,
+      grade_visibility: gradeVisibility,
+    };
+    if (groupId === '') {
+      payload.clear_group = true;
+    } else {
+      payload.group_id = Number(groupId);
+    }
+    onSave(payload);
   };
 
   return (
@@ -345,14 +411,59 @@ function ContestSettingsForm({
         </div>
       </div>
 
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="mb-1 block text-sm font-medium text-text-muted">
+            Associate with Group
+          </label>
+          <select
+            value={groupId}
+            onChange={(e) => setGroupId(e.target.value)}
+            className="w-full rounded-lg border border-border bg-panel px-3 py-2 text-sm text-text outline-none focus:border-accent"
+          >
+            <option value="">— None (global contest) —</option>
+            {groups.map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.name}
+              </option>
+            ))}
+          </select>
+          {isGroupContest && (
+            <p className="mt-1 text-xs text-text-muted">
+              Group contests are unrated and only visible to members.
+            </p>
+          )}
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium text-text-muted">Grade Visibility</label>
+          <select
+            value={gradeVisibility}
+            onChange={(e) => setGradeVisibility(e.target.value as 'private' | 'group')}
+            className="w-full rounded-lg border border-border bg-panel px-3 py-2 text-sm text-text outline-none focus:border-accent"
+          >
+            <option value="private">Private</option>
+            <option value="group">Group</option>
+          </select>
+        </div>
+      </div>
+
       <div className="flex gap-6">
-        <label className="flex items-center gap-2 text-sm text-text-muted">
-          <input type="checkbox" checked={isPublic} onChange={(e) => setIsPublic(e.target.checked)} />
-          Public
+        <label className={cn('flex items-center gap-2 text-sm', isGroupContest ? 'text-text-muted/40' : 'text-text-muted')}>
+          <input
+            type="checkbox"
+            checked={isRated}
+            onChange={(e) => setIsRated(e.target.checked)}
+            disabled={isGroupContest}
+          />
+          Rated
         </label>
         <label className="flex items-center gap-2 text-sm text-text-muted">
           <input type="checkbox" checked={allowVirtual} onChange={(e) => setAllowVirtual(e.target.checked)} />
           Allow virtual
+        </label>
+        <label className="flex items-center gap-2 text-sm text-text-muted">
+          <input type="checkbox" checked={proctored} onChange={(e) => setProctored(e.target.checked)} />
+          Proctored
         </label>
       </div>
 
@@ -369,5 +480,128 @@ function ContestSettingsForm({
         </button>
       </div>
     </form>
+  );
+}
+
+/* ─── Proctor Panel ─── */
+function ProctorPanel({ contestId }: { contestId: number }) {
+  const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
+
+  const { data: summary, isLoading: sumLoading } = useQuery({
+    queryKey: ['admin', 'contest', contestId, 'proctor-summary'],
+    queryFn: () =>
+      apiClient.get<{ summary: ProctorUserSummary[] }>(
+        `/admin/contests/${contestId}/proctor-summary`,
+      ),
+  });
+
+  const { data: events, isLoading: evLoading } = useQuery({
+    queryKey: ['admin', 'contest', contestId, 'proctor-events', selectedUserId],
+    queryFn: () =>
+      apiClient.get<{ events: ProctorEvent[] }>(
+        `/admin/contests/${contestId}/proctor-events${buildQueryString({ user_id: selectedUserId ?? undefined, limit: 500 })}`,
+      ),
+    enabled: selectedUserId !== null,
+  });
+
+  return (
+    <div className="grid grid-cols-1 gap-4 md:grid-cols-[360px_1fr]">
+      <div className="space-y-2">
+        <h3 className="text-sm font-semibold text-text">Participants</h3>
+        <div className="overflow-hidden rounded-xl border border-border">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border bg-bg-secondary">
+                <th className="px-3 py-2 text-left font-medium text-text-muted">User</th>
+                <th className="px-3 py-2 text-right font-medium text-text-muted">Events</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sumLoading && (
+                <tr>
+                  <td colSpan={2} className="px-3 py-6 text-center text-text-muted">Loading...</td>
+                </tr>
+              )}
+              {!sumLoading && (summary?.summary ?? []).length === 0 && (
+                <tr>
+                  <td colSpan={2} className="px-3 py-6 text-center text-text-muted">
+                    No proctor events recorded.
+                  </td>
+                </tr>
+              )}
+              {(summary?.summary ?? []).map((s) => (
+                <tr
+                  key={s.user_id}
+                  onClick={() => setSelectedUserId(s.user_id)}
+                  className={cn(
+                    'cursor-pointer border-b border-border last:border-0 hover:bg-accent-subtle/30',
+                    selectedUserId === s.user_id && 'bg-accent-subtle/40',
+                  )}
+                >
+                  <td className="px-3 py-2 text-text">{s.username}</td>
+                  <td className="px-3 py-2 text-right">
+                    <span className={cn(
+                      'inline-flex rounded-full px-2 py-0.5 text-xs font-medium',
+                      s.total_events > 10
+                        ? 'bg-error/15 text-error'
+                        : s.total_events > 3
+                        ? 'bg-warning/15 text-warning'
+                        : 'bg-text-muted/15 text-text-muted',
+                    )}>
+                      {s.total_events}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <h3 className="text-sm font-semibold text-text">
+          Events {selectedUserId ? `for user #${selectedUserId}` : '(select a participant)'}
+        </h3>
+        {selectedUserId === null ? (
+          <div className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-text-muted">
+            Pick a participant on the left to see their proctor event log.
+          </div>
+        ) : evLoading ? (
+          <p className="py-8 text-center text-text-muted">Loading events...</p>
+        ) : (
+          <div className="overflow-hidden rounded-xl border border-border">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border bg-bg-secondary">
+                  <th className="px-3 py-2 text-left font-medium text-text-muted">Time</th>
+                  <th className="px-3 py-2 text-left font-medium text-text-muted">Event</th>
+                  <th className="px-3 py-2 text-left font-medium text-text-muted">Details</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(events?.events ?? []).map((e) => (
+                  <tr key={e.id} className="border-b border-border last:border-0">
+                    <td className="px-3 py-2 text-text-muted whitespace-nowrap">
+                      {new Date(e.created_at).toLocaleString()}
+                    </td>
+                    <td className="px-3 py-2 font-medium text-text">{e.event_type}</td>
+                    <td className="px-3 py-2 text-text-muted">
+                      <code className="text-xs">{JSON.stringify(e.details ?? {})}</code>
+                    </td>
+                  </tr>
+                ))}
+                {(events?.events ?? []).length === 0 && (
+                  <tr>
+                    <td colSpan={3} className="px-3 py-6 text-center text-text-muted">
+                      No events logged for this user.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }

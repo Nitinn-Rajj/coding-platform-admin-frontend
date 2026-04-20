@@ -1,32 +1,32 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { apiClient } from '@/lib/api-client';
+import { apiClient, buildQueryString } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
-import { Plus, Search, Eye, Pencil, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Search, Eye, Pencil, ChevronLeft, ChevronRight } from 'lucide-react';
 import type { Problem, PaginatedResponse } from '@/types';
 
 export function ProblemListPage() {
   const navigate = useNavigate();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
+  const [difficulty, setDifficulty] = useState('');
   const limit = 20;
 
   const { data, isLoading } = useQuery({
-    queryKey: ['admin', 'problems', page, search],
+    queryKey: ['admin', 'problems', page, search, difficulty],
     queryFn: () =>
       apiClient.get<PaginatedResponse<Problem>>(
-        `/admin/problems?page=${page}&limit=${limit}${search ? `&search=${encodeURIComponent(search)}` : ''}`,
+        `/admin/problems${buildQueryString({ page, search, difficulty })}`,
       ),
   });
 
   const problems = data?.data ?? [];
   const total = data?.total ?? 0;
-  const totalPages = Math.ceil(total / limit);
+  const totalPages = data?.pages ?? Math.ceil(total / limit);
 
   return (
     <div className="space-y-4">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold text-text">Problems</h1>
         <button
@@ -38,27 +38,37 @@ export function ProblemListPage() {
         </button>
       </div>
 
-      {/* Search */}
-      <div className="relative max-w-sm">
-        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
-        <input
-          value={search}
-          onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-          placeholder="Search problems..."
-          className="w-full rounded-lg border border-border bg-panel py-2 pl-10 pr-3 text-sm text-text placeholder:text-text-muted/50 outline-none focus:border-accent transition-colors"
-        />
+      <div className="flex items-center gap-3">
+        <div className="relative max-w-sm flex-1">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+          <input
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+            placeholder="Search problems..."
+            className="w-full rounded-lg border border-border bg-panel py-2 pl-10 pr-3 text-sm text-text placeholder:text-text-muted/50 outline-none focus:border-accent transition-colors"
+          />
+        </div>
+        <select
+          value={difficulty}
+          onChange={(e) => { setDifficulty(e.target.value); setPage(1); }}
+          className="rounded-lg border border-border bg-panel px-3 py-2 text-sm text-text outline-none focus:border-accent"
+        >
+          <option value="">All difficulties</option>
+          <option value="easy">Easy</option>
+          <option value="medium">Medium</option>
+          <option value="hard">Hard</option>
+        </select>
       </div>
 
-      {/* Table */}
       <div className="overflow-x-auto rounded-xl border border-border">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border bg-bg-secondary">
               <th className="px-4 py-3 text-left font-medium text-text-muted">Title</th>
               <th className="px-4 py-3 text-left font-medium text-text-muted">Difficulty</th>
+              <th className="px-4 py-3 text-left font-medium text-text-muted">Type</th>
               <th className="px-4 py-3 text-left font-medium text-text-muted">Tests</th>
-              <th className="px-4 py-3 text-left font-medium text-text-muted">Published</th>
-              <th className="px-4 py-3 text-left font-medium text-text-muted">Tags</th>
+              <th className="px-4 py-3 text-left font-medium text-text-muted">Creator</th>
               <th className="px-4 py-3 text-right font-medium text-text-muted">Actions</th>
             </tr>
           </thead>
@@ -97,20 +107,18 @@ export function ProblemListPage() {
                     {p.difficulty}
                   </span>
                 </td>
-                <td className="px-4 py-3 text-text-muted">{p.test_count ?? 0}</td>
                 <td className="px-4 py-3">
                   <span className={cn(
-                    'inline-flex h-2 w-2 rounded-full',
-                    p.is_published ? 'bg-success' : 'bg-text-muted',
-                  )} />
+                    'inline-flex rounded-full px-2 py-0.5 text-xs font-medium capitalize',
+                    p.problem_type === 'subjective'
+                      ? 'bg-accent-subtle/50 text-accent'
+                      : 'bg-bg-secondary text-text-muted',
+                  )}>
+                    {p.problem_type}
+                  </span>
                 </td>
-                <td className="px-4 py-3">
-                  <div className="flex flex-wrap gap-1">
-                    {(p.tags ?? []).slice(0, 3).map((t) => (
-                      <span key={t} className="rounded bg-bg-secondary px-1.5 py-0.5 text-xs text-text-muted">{t}</span>
-                    ))}
-                  </div>
-                </td>
+                <td className="px-4 py-3 text-text-muted">{p.test_count ?? 0}</td>
+                <td className="px-4 py-3 text-text-muted">{p.creator_name}</td>
                 <td className="px-4 py-3">
                   <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
                     <button
@@ -125,9 +133,6 @@ export function ProblemListPage() {
                     >
                       <Pencil size={14} />
                     </button>
-                    <button className="rounded p-1.5 text-text-muted hover:bg-red-500/10 hover:text-red-400">
-                      <Trash2 size={14} />
-                    </button>
                   </div>
                 </td>
               </tr>
@@ -136,7 +141,6 @@ export function ProblemListPage() {
         </table>
       </div>
 
-      {/* Pagination */}
       {totalPages > 1 && (
         <div className="flex items-center justify-between">
           <p className="text-sm text-text-muted">

@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
-import { ArrowLeft, Upload, Globe } from 'lucide-react';
+import { ArrowLeft, Upload } from 'lucide-react';
 import type { Problem } from '@/types';
 import { StatementTab } from '../components/StatementTab';
 import { TestCasesTab } from '../components/TestCasesTab';
@@ -12,16 +12,25 @@ import { TestingTab } from '../components/TestingTab';
 import { AccessTab } from '../components/AccessTab';
 import { RevisionsTab } from '../components/RevisionsTab';
 
-type Tab = 'statement' | 'tests' | 'generators' | 'validators' | 'checkers' | 'solutions' | 'testing' | 'access' | 'revisions';
+type Tab =
+  | 'statement'
+  | 'tests'
+  | 'generators'
+  | 'validators'
+  | 'checkers'
+  | 'solutions'
+  | 'testing'
+  | 'access'
+  | 'revisions';
 
-const tabs: { key: Tab; label: string }[] = [
+const tabs: { key: Tab; label: string; hideForSubjective?: boolean }[] = [
   { key: 'statement', label: 'Statement' },
-  { key: 'tests', label: 'Tests' },
-  { key: 'generators', label: 'Generators' },
-  { key: 'validators', label: 'Validators' },
-  { key: 'checkers', label: 'Checkers' },
-  { key: 'solutions', label: 'Solutions' },
-  { key: 'testing', label: 'Testing' },
+  { key: 'tests', label: 'Tests', hideForSubjective: true },
+  { key: 'generators', label: 'Generators', hideForSubjective: true },
+  { key: 'validators', label: 'Validators', hideForSubjective: true },
+  { key: 'checkers', label: 'Checkers', hideForSubjective: true },
+  { key: 'solutions', label: 'Solutions', hideForSubjective: true },
+  { key: 'testing', label: 'Testing', hideForSubjective: true },
   { key: 'access', label: 'Access' },
   { key: 'revisions', label: 'Revisions' },
 ];
@@ -57,16 +66,18 @@ export function ProblemEditorPage() {
     if (!confirm('Publish this problem? It will be visible to users.')) return;
     try {
       await apiClient.post(`/admin/problems/${id}/publish`);
-      // refetch
       window.location.reload();
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Publish failed');
     }
   };
 
+  const visibleTabs = tabs.filter(
+    (t) => !(problem.problem_type === 'subjective' && t.hideForSubjective),
+  );
+
   return (
     <div className="space-y-4">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <button
@@ -77,13 +88,8 @@ export function ProblemEditorPage() {
           </button>
           <div>
             <h1 className="text-xl font-semibold text-text">{problem.title}</h1>
-            <p className="text-xs text-text-muted">
-              Rev {problem.active_revision} · {problem.difficulty} ·{' '}
-              {problem.is_published ? (
-                <span className="text-success">Published</span>
-              ) : (
-                <span className="text-warning">Draft</span>
-              )}
+            <p className="text-xs text-text-muted capitalize">
+              {problem.difficulty} · {problem.problem_type} problem
             </p>
           </div>
         </div>
@@ -92,15 +98,14 @@ export function ProblemEditorPage() {
             onClick={handlePublish}
             className="flex items-center gap-2 rounded-lg border border-success/30 bg-success/10 px-3 py-1.5 text-sm font-medium text-success transition-colors hover:bg-success/20"
           >
-            {problem.is_published ? <Globe size={14} /> : <Upload size={14} />}
-            {problem.is_published ? 'Republish' : 'Publish'}
+            <Upload size={14} />
+            Publish
           </button>
         </div>
       </div>
 
-      {/* Tabs */}
       <div className="flex gap-1 overflow-x-auto border-b border-border pb-px">
-        {tabs.map((tab) => (
+        {visibleTabs.map((tab) => (
           <button
             key={tab.key}
             onClick={() => setActiveTab(tab.key)}
@@ -116,7 +121,6 @@ export function ProblemEditorPage() {
         ))}
       </div>
 
-      {/* Tab Content */}
       <div>
         {activeTab === 'statement' && <StatementTab problem={problem} />}
         {activeTab === 'tests' && <TestCasesTab problemId={id!} />}

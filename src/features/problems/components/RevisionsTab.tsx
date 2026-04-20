@@ -54,13 +54,12 @@ export function RevisionsTab({ problemId }: Props) {
               <div>
                 <p className="text-sm font-medium text-text">{rev.title}</p>
                 <p className="text-xs text-text-muted">
-                  {rev.difficulty} · {rev.time_limit_ms}ms · {Math.round(rev.memory_limit_kb / 1024)}MB
+                  {rev.difficulty} · {rev.time_limit_ms}ms · {rev.memory_limit_mb}MB
                 </p>
               </div>
             </div>
             <div className="flex items-center gap-3">
               <div className="text-right">
-                <p className="text-xs text-text-muted">{rev.change_summary}</p>
                 <p className="flex items-center gap-1 text-xs text-text-muted">
                   <Clock size={10} />
                   {new Date(rev.created_at).toLocaleString()}

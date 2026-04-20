@@ -38,7 +38,7 @@ export function TestCasesTab({ problemId }: Props) {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (testId: string) =>
+    mutationFn: (testId: number) =>
       apiClient.delete(`/admin/problems/${problemId}/tests/${testId}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'problem', problemId, 'tests'] });

@@ -21,7 +21,7 @@ export function AccessTab({ problemId }: Props) {
   });
 
   const grantMutation = useMutation({
-    mutationFn: (payload: { user_id: number; access_role: string }) =>
+    mutationFn: (payload: { user_id: number; role: string }) =>
       apiClient.post(`/admin/problems/${problemId}/access`, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'problem', problemId, 'access'] });
@@ -91,7 +91,7 @@ export function AccessTab({ problemId }: Props) {
                 onClick={() =>
                   grantMutation.mutate({
                     user_id: Number(grantUserId),
-                    access_role: grantRole,
+                    role: grantRole,
                   })
                 }
                 disabled={!grantUserId || grantMutation.isPending}
@@ -125,8 +125,8 @@ export function AccessTab({ problemId }: Props) {
                     <span className="ml-1 text-xs text-text-muted">#{entry.user_id}</span>
                   </td>
                   <td className="px-4 py-3">
-                    <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${roleColors[entry.access_role] ?? ''}`}>
-                      {entry.access_role}
+                    <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${roleColors[entry.role] ?? ''}`}>
+                      {entry.role}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-text-muted">

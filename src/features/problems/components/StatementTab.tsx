@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
 import { Save } from 'lucide-react';
-import type { Problem } from '@/types';
+import type { Problem, ProblemType } from '@/types';
 
 interface Props {
   problem: Problem;
@@ -12,12 +12,12 @@ interface Props {
 export function StatementTab({ problem }: Props) {
   const queryClient = useQueryClient();
   const [title, setTitle] = useState(problem.title);
-  const [description, setDescription] = useState(problem.description);
+  const [statement, setStatement] = useState(problem.statement ?? '');
   const [difficulty, setDifficulty] = useState(problem.difficulty);
   const [timeLimit, setTimeLimit] = useState(problem.time_limit_ms);
-  const [memoryLimit, setMemoryLimit] = useState(problem.memory_limit_kb);
-  const [tagsInput, setTagsInput] = useState((problem.tags ?? []).join(', '));
-  const [changeSummary, setChangeSummary] = useState('');
+  const [memoryLimit, setMemoryLimit] = useState(problem.memory_limit_mb);
+  const [problemType, setProblemType] = useState<ProblemType>(problem.problem_type);
+  const [points, setPoints] = useState<number | ''>(problem.points ?? '');
 
   const updateMutation = useMutation({
     mutationFn: (payload: Record<string, unknown>) =>
@@ -29,15 +29,14 @@ export function StatementTab({ problem }: Props) {
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
-    const tags = tagsInput.split(',').map((t) => t.trim()).filter(Boolean);
     updateMutation.mutate({
       title,
-      description,
+      statement,
       difficulty,
       time_limit_ms: timeLimit,
-      memory_limit_kb: memoryLimit,
-      tags,
-      change_summary: changeSummary || `Updated problem statement`,
+      memory_limit_mb: memoryLimit,
+      problem_type: problemType,
+      points: points === '' ? null : Number(points),
     });
   };
 
@@ -64,10 +63,46 @@ export function StatementTab({ problem }: Props) {
       </div>
 
       <div>
-        <label className="mb-1 block text-sm font-medium text-text-muted">Description (Markdown)</label>
+        <label className="mb-1 block text-sm font-medium text-text-muted">Problem Type</label>
+        <div className="flex gap-3">
+          <label className={cn(
+            'flex-1 cursor-pointer rounded-lg border p-3 text-sm',
+            problemType === 'standard'
+              ? 'border-accent bg-accent-subtle/30 text-text'
+              : 'border-border bg-panel text-text-muted hover:border-accent/30',
+          )}>
+            <input
+              type="radio"
+              checked={problemType === 'standard'}
+              onChange={() => setProblemType('standard')}
+              className="mr-2"
+            />
+            <span className="font-medium">Standard</span>
+            <p className="mt-1 text-xs">Auto-judged against test cases.</p>
+          </label>
+          <label className={cn(
+            'flex-1 cursor-pointer rounded-lg border p-3 text-sm',
+            problemType === 'subjective'
+              ? 'border-accent bg-accent-subtle/30 text-text'
+              : 'border-border bg-panel text-text-muted hover:border-accent/30',
+          )}>
+            <input
+              type="radio"
+              checked={problemType === 'subjective'}
+              onChange={() => setProblemType('subjective')}
+              className="mr-2"
+            />
+            <span className="font-medium">Subjective</span>
+            <p className="mt-1 text-xs">Manually graded by an admin.</p>
+          </label>
+        </div>
+      </div>
+
+      <div>
+        <label className="mb-1 block text-sm font-medium text-text-muted">Statement (Markdown)</label>
         <textarea
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
+          value={statement}
+          onChange={(e) => setStatement(e.target.value)}
           rows={16}
           className="w-full rounded-lg border border-border bg-panel px-3 py-2 text-sm text-text outline-none focus:border-accent font-mono"
         />
@@ -92,36 +127,32 @@ export function StatementTab({ problem }: Props) {
             type="number"
             value={timeLimit}
             onChange={(e) => setTimeLimit(Number(e.target.value))}
-            className="w-full rounded-lg border border-border bg-panel px-3 py-2 text-sm text-text outline-none focus:border-accent"
+            disabled={problemType === 'subjective'}
+            className="w-full rounded-lg border border-border bg-panel px-3 py-2 text-sm text-text outline-none focus:border-accent disabled:opacity-60"
           />
         </div>
         <div>
-          <label className="mb-1 block text-sm font-medium text-text-muted">Memory Limit (KB)</label>
+          <label className="mb-1 block text-sm font-medium text-text-muted">Memory Limit (MB)</label>
           <input
             type="number"
             value={memoryLimit}
             onChange={(e) => setMemoryLimit(Number(e.target.value))}
-            className="w-full rounded-lg border border-border bg-panel px-3 py-2 text-sm text-text outline-none focus:border-accent"
+            disabled={problemType === 'subjective'}
+            className="w-full rounded-lg border border-border bg-panel px-3 py-2 text-sm text-text outline-none focus:border-accent disabled:opacity-60"
           />
         </div>
       </div>
 
       <div>
-        <label className="mb-1 block text-sm font-medium text-text-muted">Tags (comma-separated)</label>
+        <label className="mb-1 block text-sm font-medium text-text-muted">
+          Default Points (optional)
+        </label>
         <input
-          value={tagsInput}
-          onChange={(e) => setTagsInput(e.target.value)}
+          type="number"
+          value={points}
+          onChange={(e) => setPoints(e.target.value === '' ? '' : Number(e.target.value))}
           className="w-full rounded-lg border border-border bg-panel px-3 py-2 text-sm text-text outline-none focus:border-accent"
-        />
-      </div>
-
-      <div>
-        <label className="mb-1 block text-sm font-medium text-text-muted">Change Summary</label>
-        <input
-          value={changeSummary}
-          onChange={(e) => setChangeSummary(e.target.value)}
-          placeholder="Brief description of changes"
-          className="w-full rounded-lg border border-border bg-panel px-3 py-2 text-sm text-text outline-none focus:border-accent"
+          placeholder="100"
         />
       </div>
 

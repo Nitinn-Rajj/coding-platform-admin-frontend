@@ -109,7 +109,7 @@ export function AuditLogPage() {
                 </td>
                 <td className="px-4 py-3">
                   <span className="text-text-muted">{entry.entity_type}</span>
-                  <span className="ml-1 text-xs text-text-muted/50">#{entry.entity_id?.slice(0, 8)}</span>
+                  <span className="ml-1 text-xs text-text-muted/50">#{entry.entity_id}</span>
                 </td>
                 <td className="px-4 py-3">
                   {entry.details && (

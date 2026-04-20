@@ -21,40 +21,53 @@ export interface AdminUser {
 }
 
 /* ─── Problem ─── */
+export type Difficulty = 'easy' | 'medium' | 'hard';
+export type ProblemType = 'standard' | 'subjective';
+
 export interface Problem {
-  id: string;
+  id: number;
   title: string;
   slug: string;
-  description: string;
-  difficulty: 'easy' | 'medium' | 'hard';
+  difficulty: Difficulty;
   time_limit_ms: number;
-  memory_limit_kb: number;
-  is_published: boolean;
-  active_revision: number;
+  memory_limit_mb: number;
+  points?: number | null;
+  problem_type: ProblemType;
   created_by: number;
-  creator_username: string;
-  created_at: string;
-  updated_at: string;
-  tags: string[];
+  creator_name: string;
   test_count: number;
+  created_at: string;
+  // populated via detail endpoint
+  tags?: TagInfo[];
+  statement?: string;
+  checker_code?: string;
+  contest_id?: number | null;
+}
+
+export interface TagInfo {
+  id: number;
+  name: string;
 }
 
 export interface ProblemRevision {
+  id: number;
+  problem_id: number;
   revision: number;
   title: string;
-  description: string;
-  difficulty: string;
+  difficulty: Difficulty;
   time_limit_ms: number;
-  memory_limit_kb: number;
-  change_summary: string;
+  memory_limit_mb: number;
+  points?: number | null;
+  is_active: boolean;
   created_by: number;
+  creator_name: string;
   created_at: string;
 }
 
 /* ─── Test Case ─── */
 export interface TestCase {
-  id: string;
-  problem_id: string;
+  id: number;
+  problem_id: number;
   input: string;
   expected_output: string;
   is_sample: boolean;
@@ -66,7 +79,7 @@ export interface TestCase {
 
 export interface GeneratedBatch {
   id: string;
-  problem_id: string;
+  problem_id: number;
   generator_id: string;
   count: number;
   args_template: string;
@@ -75,16 +88,20 @@ export interface GeneratedBatch {
 }
 
 /* ─── Components (Generator, Validator, Checker, Interactor, Solution) ─── */
-export type ComponentType = 'generators' | 'validators' | 'checkers' | 'interactors' | 'solutions';
+export type ComponentType =
+  | 'generators'
+  | 'validators'
+  | 'checkers'
+  | 'interactors'
+  | 'solutions';
 
 export interface ProblemComponent {
   id: string;
-  problem_id: string;
+  problem_id: number;
   name: string;
   source_code: string;
   language: string;
   is_active: boolean;
-  // solution-specific
   solution_type?: 'main' | 'brute' | 'wa' | 'tle';
   created_by: number;
   created_at: string;
@@ -97,43 +114,151 @@ export type AccessRole = 'viewer' | 'tester' | 'editor' | 'owner';
 export interface ProblemAccess {
   user_id: number;
   username: string;
-  access_role: AccessRole;
+  role: AccessRole;
   granted_at: string;
+  granted_by: number;
 }
 
 /* ─── Contest ─── */
 export type ContestStatus = 'draft' | 'upcoming' | 'running' | 'ended' | 'finalized';
 export type ScoringType = 'icpc' | 'ioi';
+export type ScoringMode = 'all_or_nothing' | 'partial';
+export type GradeVisibility = 'private' | 'group';
 
 export interface Contest {
-  id: string;
+  id: number;
   title: string;
-  description: string;
+  description?: string;
   start_time: string;
   end_time: string;
-  duration_minutes: number;
+  is_rated: boolean;
   scoring_type: ScoringType;
   status: ContestStatus;
-  is_public: boolean;
-  freeze_time_minutes: number | null;
-  penalty_time_seconds: number;
-  allow_virtual: boolean;
+  problem_count: number;
+  participant_count: number;
   created_by: number;
+  creator_name: string;
   created_at: string;
-  updated_at: string;
-  problems_count: number;
-  participants_count: number;
+  penalty_time_seconds?: number;
+  freeze_time_minutes?: number | null;
+  allow_virtual?: boolean;
+  group_id?: number | null;
+  group_name?: string;
+  proctored: boolean;
+  grade_visibility: GradeVisibility;
+  problems?: ContestProblem[];
 }
 
 export interface ContestProblem {
-  id: string;
-  contest_id: string;
-  problem_id: string;
-  problem_title: string;
-  label: string;
-  order_index: number;
+  id: number;
+  problem_id: number;
+  title: string;
+  slug: string;
+  problem_type: ProblemType;
   max_points: number;
-  scoring_config: Record<string, unknown> | null;
+  problem_order: number;
+  scoring_mode: ScoringMode;
+  scoring_config?: string;
+}
+
+/* ─── Groups ─── */
+export interface Group {
+  id: number;
+  name: string;
+  description: string;
+  created_by: number;
+  created_at: string;
+  member_count?: number;
+  my_role?: string;
+  is_member?: boolean;
+}
+
+export interface GroupMember {
+  group_id: number;
+  user_id: number;
+  username: string;
+  role: 'member' | 'admin';
+  joined_at: string;
+}
+
+export type JoinRequestStatus = 'pending' | 'approved' | 'rejected';
+
+export interface GroupJoinRequest {
+  id: number;
+  group_id: number;
+  group_name?: string;
+  user_id: number;
+  username: string;
+  status: JoinRequestStatus;
+  message: string;
+  decided_by?: number | null;
+  decided_at?: string | null;
+  created_at: string;
+}
+
+/* ─── Proctor Events ─── */
+export interface ProctorEvent {
+  id: number;
+  contest_id: number;
+  user_id: number;
+  username?: string;
+  event_type: string;
+  details?: unknown;
+  created_at: string;
+}
+
+export interface ProctorUserSummary {
+  user_id: number;
+  username: string;
+  total_events: number;
+  last_event_at?: string | null;
+  fs_exit: number;
+  tab_visibility: number;
+  window_blur: number;
+  right_click: number;
+  devtools: number;
+}
+
+/* ─── Submissions / Grading ─── */
+export type SubmissionStatus =
+  | 'pending'
+  | 'pending_review'
+  | 'judging'
+  | 'accepted'
+  | 'rejected'
+  | 'wrong_answer'
+  | 'time_limit_exceeded'
+  | 'memory_limit_exceeded'
+  | 'runtime_error'
+  | 'compilation_error'
+  | 'partial';
+
+export interface AdminSubmissionSummary {
+  id: number;
+  user_id: number;
+  username: string;
+  problem_id: number;
+  problem_slug: string;
+  problem_type: ProblemType;
+  contest_id?: number | null;
+  contest_name?: string;
+  language: string;
+  status: SubmissionStatus;
+  passed_count: number;
+  total_count: number;
+  manual_score?: number | null;
+  is_locked: boolean;
+  has_feedback: boolean;
+  submitted_at: string;
+  graded_at?: string | null;
+}
+
+export interface AdminSubmissionDetail extends AdminSubmissionSummary {
+  source_code: string;
+  feedback: string;
+  grader_name?: string;
+  max_points?: number;
+  result?: unknown;
 }
 
 /* ─── Testing ─── */
@@ -157,13 +282,14 @@ export interface StressTestResult {
 
 /* ─── Audit Log ─── */
 export interface AuditLogEntry {
-  id: string;
+  id: number;
   user_id: number;
   username: string;
   action: string;
   entity_type: string;
-  entity_id: string;
+  entity_id: number;
   details: Record<string, unknown> | null;
+  ip_address?: string;
   created_at: string;
 }
 
@@ -172,5 +298,5 @@ export interface PaginatedResponse<T> {
   data: T[];
   total: number;
   page: number;
-  limit: number;
+  pages: number;
 }
