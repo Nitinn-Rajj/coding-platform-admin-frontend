@@ -24,6 +24,8 @@ export interface AdminUser {
 export type Difficulty = 'easy' | 'medium' | 'hard';
 export type ProblemType = 'standard' | 'subjective';
 
+export type ProblemStatus = 'draft' | 'published';
+
 export interface Problem {
   id: number;
   title: string;
@@ -37,6 +39,8 @@ export interface Problem {
   creator_name: string;
   test_count: number;
   created_at: string;
+  published_at: string | null;
+  status: ProblemStatus;
   // populated via detail endpoint
   tags?: TagInfo[];
   statement?: string;
@@ -77,6 +81,20 @@ export interface TestCase {
   created_at: string;
 }
 
+export interface ValidationFailure {
+  test_id: number;
+  order_index: number; // 1-based display number
+  error: string;
+  input: string;       // truncated input snippet
+}
+
+export interface ValidateTestsResponse {
+  valid: boolean;
+  total: number;
+  passed: number;
+  failures: ValidationFailure[];
+}
+
 export interface GeneratedBatch {
   id: string;
   problem_id: number;
@@ -95,15 +113,30 @@ export type ComponentType =
   | 'interactors'
   | 'solutions';
 
+/** Matches backend `ComponentInfo` in admin_components.go. Fields marked
+ *  optional are only populated for specific component types:
+ *    generators  → description, is_active
+ *    validators  → is_active
+ *    checkers    → is_active, checker_type
+ *    interactors → is_active
+ *    solutions   → expected_verdict, tag
+ *  All components are C++ only; there is no `language` field on the wire.
+ */
+export type CheckerType = 'standard' | 'partial' | 'interactive';
+export type SolutionTag = 'main' | 'brute' | 'wa' | 'tle';
+
 export interface ProblemComponent {
-  id: string;
+  id: number;
   problem_id: number;
   name: string;
   source_code: string;
-  language: string;
-  is_active: boolean;
-  solution_type?: 'main' | 'brute' | 'wa' | 'tle';
+  description?: string;
+  is_active?: boolean;
+  checker_type?: CheckerType;
+  expected_verdict?: string;
+  tag?: SolutionTag | string;
   created_by: number;
+  creator_name: string;
   created_at: string;
   updated_at: string;
 }

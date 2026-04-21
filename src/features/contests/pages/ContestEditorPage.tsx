@@ -11,6 +11,7 @@ import {
 import type {
   Contest, ContestProblem, Group,
   ProctorEvent, ProctorUserSummary,
+  Problem, PaginatedResponse,
 } from '@/types';
 
 type Tab = 'settings' | 'problems' | 'proctor';
@@ -21,7 +22,9 @@ export function ContestEditorPage() {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<Tab>('settings');
   const [showAddProblem, setShowAddProblem] = useState(false);
-  const [addProblemId, setAddProblemId] = useState('');
+  const [selectedProblem, setSelectedProblem] = useState<Problem | null>(null);
+  const [problemSearch, setProblemSearch] = useState('');
+  const [problemPage, setProblemPage] = useState(1);
   const [addMaxPoints, setAddMaxPoints] = useState(100);
   const [addScoringMode, setAddScoringMode] = useState<'all_or_nothing' | 'partial'>('all_or_nothing');
   const [actionError, setActionError] = useState('');
@@ -77,9 +80,24 @@ export function ContestEditorPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'contest', id] });
       setShowAddProblem(false);
-      setAddProblemId('');
+      setSelectedProblem(null);
+      setProblemSearch('');
+      setProblemPage(1);
+      setActionSuccess('Problem added to contest.');
     },
     onError: (e) => setActionError(asMsg(e)),
+  });
+
+  // Master problem list for the picker. We intentionally do NOT pass a status
+  // filter so that both draft and published problems appear — contest admins
+  // can legitimately add an unpublished problem to a contest.
+  const { data: problemPage1, isLoading: problemsLoading } = useQuery({
+    queryKey: ['admin', 'problems', 'picker', problemPage, problemSearch],
+    queryFn: () =>
+      apiClient.get<PaginatedResponse<Problem>>(
+        `/admin/problems${buildQueryString({ page: problemPage, search: problemSearch })}`,
+      ),
+    enabled: showAddProblem,
   });
 
   const removeProblemMutation = useMutation({
@@ -215,62 +233,198 @@ export function ContestEditorPage() {
             </button>
           </div>
 
-          {showAddProblem && (
-            <div className="rounded-xl border border-border bg-panel p-4 space-y-3">
-              <h3 className="text-sm font-medium text-text">Add Problem to Contest</h3>
-              <div className="grid grid-cols-3 gap-3">
+          {showAddProblem && (() => {
+            const pickerProblems = problemPage1?.data ?? [];
+            const pickerTotal = problemPage1?.total ?? 0;
+            const pickerPages = problemPage1?.pages ?? 1;
+            const existingIds = new Set(problems.map((cp) => cp.problem_id));
+            return (
+              <div className="rounded-xl border border-border bg-panel p-4 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-medium text-text">Add Problem to Contest</h3>
+                  <p className="text-xs text-text-muted">
+                    Drafts can be added — they become visible to participants only through this contest.
+                  </p>
+                </div>
+
+                {/* Search + picker */}
                 <div>
-                  <label className="mb-1 block text-xs text-text-muted">Problem ID</label>
                   <input
-                    value={addProblemId}
-                    onChange={(e) => setAddProblemId(e.target.value)}
-                    placeholder="123"
+                    value={problemSearch}
+                    onChange={(e) => { setProblemSearch(e.target.value); setProblemPage(1); }}
+                    placeholder="Search problems by title or slug..."
                     className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm text-text outline-none focus:border-accent"
                   />
                 </div>
-                <div>
-                  <label className="mb-1 block text-xs text-text-muted">Max Points</label>
-                  <input
-                    type="number"
-                    value={addMaxPoints}
-                    onChange={(e) => setAddMaxPoints(Number(e.target.value))}
-                    className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm text-text outline-none focus:border-accent"
-                  />
+
+                <div className="overflow-x-auto rounded-lg border border-border">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border bg-bg-secondary">
+                        <th className="px-3 py-2 text-left font-medium text-text-muted">ID</th>
+                        <th className="px-3 py-2 text-left font-medium text-text-muted">Title</th>
+                        <th className="px-3 py-2 text-left font-medium text-text-muted">Status</th>
+                        <th className="px-3 py-2 text-left font-medium text-text-muted">Type</th>
+                        <th className="px-3 py-2 text-right font-medium text-text-muted">Pick</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {problemsLoading && (
+                        <tr><td colSpan={5} className="px-3 py-6 text-center text-text-muted">Loading...</td></tr>
+                      )}
+                      {!problemsLoading && pickerProblems.length === 0 && (
+                        <tr><td colSpan={5} className="px-3 py-6 text-center text-text-muted">No problems found</td></tr>
+                      )}
+                      {pickerProblems.map((p) => {
+                        const alreadyAdded = existingIds.has(p.id);
+                        const isSelected = selectedProblem?.id === p.id;
+                        return (
+                          <tr
+                            key={p.id}
+                            className={cn(
+                              'border-b border-border last:border-0',
+                              isSelected && 'bg-accent-subtle/30',
+                            )}
+                          >
+                            <td className="px-3 py-2 font-mono text-xs text-text-muted">#{p.id}</td>
+                            <td className="px-3 py-2">
+                              <p className="font-medium text-text">{p.title}</p>
+                              <p className="text-xs text-text-muted">{p.slug}</p>
+                            </td>
+                            <td className="px-3 py-2">
+                              <span
+                                className={cn(
+                                  'inline-flex rounded-full px-2 py-0.5 text-xs font-medium capitalize',
+                                  p.status === 'published'
+                                    ? 'bg-success/15 text-success'
+                                    : 'bg-warning/15 text-warning',
+                                )}
+                              >
+                                {p.status}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2 text-xs text-text-muted capitalize">{p.problem_type}</td>
+                            <td className="px-3 py-2 text-right">
+                              <button
+                                type="button"
+                                onClick={() => setSelectedProblem(p)}
+                                disabled={alreadyAdded}
+                                title={alreadyAdded ? 'Already added to this contest' : undefined}
+                                className={cn(
+                                  'rounded-lg border px-2 py-1 text-xs font-medium transition-colors',
+                                  alreadyAdded
+                                    ? 'cursor-not-allowed border-border text-text-muted opacity-60'
+                                    : isSelected
+                                      ? 'border-accent bg-accent text-bg'
+                                      : 'border-border text-text hover:border-accent hover:text-accent',
+                                )}
+                              >
+                                {alreadyAdded ? 'Added' : isSelected ? 'Selected' : 'Select'}
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
-                <div>
-                  <label className="mb-1 block text-xs text-text-muted">Scoring Mode</label>
-                  <select
-                    value={addScoringMode}
-                    onChange={(e) => setAddScoringMode(e.target.value as 'all_or_nothing' | 'partial')}
-                    className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm text-text outline-none focus:border-accent"
-                  >
-                    <option value="all_or_nothing">All-or-nothing</option>
-                    <option value="partial">Partial (per test case)</option>
-                  </select>
-                </div>
+
+                {pickerPages > 1 && (
+                  <div className="flex items-center justify-between text-xs text-text-muted">
+                    <span>{pickerTotal} problems</span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setProblemPage((p) => Math.max(1, p - 1))}
+                        disabled={problemPage === 1}
+                        className="rounded border border-border px-2 py-1 hover:bg-accent-subtle disabled:opacity-40"
+                      >
+                        Prev
+                      </button>
+                      <span>{problemPage} / {pickerPages}</span>
+                      <button
+                        onClick={() => setProblemPage((p) => Math.min(pickerPages, p + 1))}
+                        disabled={problemPage === pickerPages}
+                        className="rounded border border-border px-2 py-1 hover:bg-accent-subtle disabled:opacity-40"
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Selected problem summary + scoring settings */}
+                {selectedProblem ? (
+                  <div className="rounded-lg border border-accent/40 bg-accent-subtle/20 p-3 space-y-3">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <p className="text-xs text-text-muted">Selected problem</p>
+                        <p className="text-sm font-medium text-text">
+                          #{selectedProblem.id} · {selectedProblem.title}
+                        </p>
+                        <p className="text-xs text-text-muted">
+                          {selectedProblem.slug} · <span className="capitalize">{selectedProblem.problem_type}</span> · <span className="capitalize">{selectedProblem.status}</span>
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedProblem(null)}
+                        className="text-xs text-text-muted hover:text-text"
+                      >
+                        Clear
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="mb-1 block text-xs text-text-muted">Max Points</label>
+                        <input
+                          type="number"
+                          value={addMaxPoints}
+                          onChange={(e) => setAddMaxPoints(Number(e.target.value))}
+                          className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm text-text outline-none focus:border-accent"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs text-text-muted">Scoring Mode</label>
+                        <select
+                          value={addScoringMode}
+                          onChange={(e) => setAddScoringMode(e.target.value as 'all_or_nothing' | 'partial')}
+                          className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm text-text outline-none focus:border-accent"
+                        >
+                          <option value="all_or_nothing">All-or-nothing</option>
+                          <option value="partial">Partial (per test case)</option>
+                        </select>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() =>
+                        addProblemMutation.mutate({
+                          problem_id: selectedProblem.id,
+                          max_points: addMaxPoints,
+                          // Let the backend auto-assign the next order (it does
+                          // MAX(problem_order)+1 when we pass 0).
+                          problem_order: 0,
+                          scoring_mode: addScoringMode,
+                        })
+                      }
+                      disabled={addProblemMutation.isPending}
+                      className="flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-bg hover:bg-accent-hover disabled:opacity-50"
+                    >
+                      <Save size={14} /> {addProblemMutation.isPending ? 'Adding...' : 'Add to Contest'}
+                    </button>
+                  </div>
+                ) : (
+                  <p className="text-xs text-text-muted">Pick a problem from the list above to add it to this contest.</p>
+                )}
               </div>
-              <button
-                onClick={() =>
-                  addProblemMutation.mutate({
-                    problem_id: Number(addProblemId),
-                    max_points: addMaxPoints,
-                    problem_order: problems.length,
-                    scoring_mode: addScoringMode,
-                  })
-                }
-                disabled={addProblemMutation.isPending || !addProblemId}
-                className="flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-bg hover:bg-accent-hover disabled:opacity-50"
-              >
-                <Save size={14} /> Add
-              </button>
-            </div>
-          )}
+            );
+          })()}
 
           <div className="overflow-x-auto rounded-xl border border-border">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border bg-bg-secondary">
                   <th className="px-4 py-3 text-left font-medium text-text-muted">#</th>
+                  <th className="px-4 py-3 text-left font-medium text-text-muted">Problem ID</th>
                   <th className="px-4 py-3 text-left font-medium text-text-muted">Problem</th>
                   <th className="px-4 py-3 text-left font-medium text-text-muted">Type</th>
                   <th className="px-4 py-3 text-left font-medium text-text-muted">Max Points</th>
@@ -281,7 +435,8 @@ export function ContestEditorPage() {
               <tbody>
                 {problems.map((cp) => (
                   <tr key={cp.id} className="border-b border-border last:border-0">
-                    <td className="px-4 py-3 font-bold text-accent">{cp.problem_order + 1}</td>
+                    <td className="px-4 py-3 font-bold text-accent">{cp.problem_order}</td>
+                    <td className="px-4 py-3 font-mono text-xs text-text-muted">#{cp.problem_id}</td>
                     <td className="px-4 py-3 text-text">
                       <p className="font-medium">{cp.title}</p>
                       <p className="text-xs text-text-muted">{cp.slug}</p>
@@ -305,7 +460,7 @@ export function ContestEditorPage() {
                 ))}
                 {problems.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="px-4 py-6 text-center text-text-muted">No problems added yet</td>
+                    <td colSpan={7} className="px-4 py-6 text-center text-text-muted">No problems added yet</td>
                   </tr>
                 )}
               </tbody>

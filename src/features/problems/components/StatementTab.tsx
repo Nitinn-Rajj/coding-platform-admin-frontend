@@ -3,7 +3,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
 import { Save } from 'lucide-react';
-import type { Problem, ProblemType } from '@/types';
+import type { Problem, ProblemType, TagInfo } from '@/types';
+import { TagEditor } from './TagEditor';
 
 interface Props {
   problem: Problem;
@@ -18,6 +19,7 @@ export function StatementTab({ problem }: Props) {
   const [memoryLimit, setMemoryLimit] = useState(problem.memory_limit_mb);
   const [problemType, setProblemType] = useState<ProblemType>(problem.problem_type);
   const [points, setPoints] = useState<number | ''>(problem.points ?? '');
+  const [tags, setTags] = useState<TagInfo[]>(problem.tags ?? []);
 
   const updateMutation = useMutation({
     mutationFn: (payload: Record<string, unknown>) =>
@@ -37,6 +39,7 @@ export function StatementTab({ problem }: Props) {
       memory_limit_mb: memoryLimit,
       problem_type: problemType,
       points: points === '' ? null : Number(points),
+      tags: tags.map((t) => t.id),
     });
   };
 
@@ -154,6 +157,11 @@ export function StatementTab({ problem }: Props) {
           className="w-full rounded-lg border border-border bg-panel px-3 py-2 text-sm text-text outline-none focus:border-accent"
           placeholder="100"
         />
+      </div>
+
+      <div>
+        <label className="mb-1 block text-sm font-medium text-text-muted">Tags</label>
+        <TagEditor value={tags} onChange={setTags} />
       </div>
 
       <div className="flex justify-end">

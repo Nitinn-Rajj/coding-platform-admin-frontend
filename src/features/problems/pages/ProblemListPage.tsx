@@ -4,20 +4,21 @@ import { useNavigate } from 'react-router-dom';
 import { apiClient, buildQueryString } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
 import { Plus, Search, Eye, Pencil, ChevronLeft, ChevronRight } from 'lucide-react';
-import type { Problem, PaginatedResponse } from '@/types';
+import type { Problem, PaginatedResponse, ProblemStatus } from '@/types';
 
 export function ProblemListPage() {
   const navigate = useNavigate();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [difficulty, setDifficulty] = useState('');
+  const [status, setStatus] = useState<'' | ProblemStatus>('');
   const limit = 20;
 
   const { data, isLoading } = useQuery({
-    queryKey: ['admin', 'problems', page, search, difficulty],
+    queryKey: ['admin', 'problems', page, search, difficulty, status],
     queryFn: () =>
       apiClient.get<PaginatedResponse<Problem>>(
-        `/admin/problems${buildQueryString({ page, search, difficulty })}`,
+        `/admin/problems${buildQueryString({ page, search, difficulty, status })}`,
       ),
   });
 
@@ -58,6 +59,15 @@ export function ProblemListPage() {
           <option value="medium">Medium</option>
           <option value="hard">Hard</option>
         </select>
+        <select
+          value={status}
+          onChange={(e) => { setStatus(e.target.value as '' | ProblemStatus); setPage(1); }}
+          className="rounded-lg border border-border bg-panel px-3 py-2 text-sm text-text outline-none focus:border-accent"
+        >
+          <option value="">All statuses</option>
+          <option value="draft">Draft</option>
+          <option value="published">Published</option>
+        </select>
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-border">
@@ -65,6 +75,7 @@ export function ProblemListPage() {
           <thead>
             <tr className="border-b border-border bg-bg-secondary">
               <th className="px-4 py-3 text-left font-medium text-text-muted">Title</th>
+              <th className="px-4 py-3 text-left font-medium text-text-muted">Status</th>
               <th className="px-4 py-3 text-left font-medium text-text-muted">Difficulty</th>
               <th className="px-4 py-3 text-left font-medium text-text-muted">Type</th>
               <th className="px-4 py-3 text-left font-medium text-text-muted">Tests</th>
@@ -75,12 +86,12 @@ export function ProblemListPage() {
           <tbody>
             {isLoading && (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-text-muted">Loading...</td>
+                <td colSpan={7} className="px-4 py-8 text-center text-text-muted">Loading...</td>
               </tr>
             )}
             {!isLoading && problems.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-text-muted">No problems found</td>
+                <td colSpan={7} className="px-4 py-8 text-center text-text-muted">No problems found</td>
               </tr>
             )}
             {problems.map((p) => (
@@ -94,6 +105,23 @@ export function ProblemListPage() {
                     <p className="font-medium text-text">{p.title}</p>
                     <p className="text-xs text-text-muted">{p.slug}</p>
                   </div>
+                </td>
+                <td className="px-4 py-3">
+                  <span
+                    className={cn(
+                      'inline-flex rounded-full px-2 py-0.5 text-xs font-medium capitalize',
+                      p.status === 'published'
+                        ? 'bg-success/15 text-success'
+                        : 'bg-warning/15 text-warning',
+                    )}
+                    title={
+                      p.status === 'published'
+                        ? `Visible to students since ${p.published_at ?? ''}`
+                        : 'Hidden from students until published'
+                    }
+                  >
+                    {p.status}
+                  </span>
                 </td>
                 <td className="px-4 py-3">
                   <span

@@ -4,7 +4,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 import { ArrowLeft, Save } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { ProblemType } from '@/types';
+import type { ProblemType, TagInfo } from '@/types';
+import { TagEditor } from '../components/TagEditor';
 
 interface CreateProblemPayload {
   title: string;
@@ -15,6 +16,7 @@ interface CreateProblemPayload {
   memory_limit_mb: number;
   problem_type: ProblemType;
   points?: number | null;
+  tags?: number[];
 }
 
 export function ProblemCreatePage() {
@@ -28,6 +30,7 @@ export function ProblemCreatePage() {
   const [memoryLimit, setMemoryLimit] = useState(256);
   const [problemType, setProblemType] = useState<ProblemType>('standard');
   const [points, setPoints] = useState<number | ''>('');
+  const [tags, setTags] = useState<TagInfo[]>([]);
   const [error, setError] = useState('');
 
   const createMutation = useMutation({
@@ -64,6 +67,7 @@ export function ProblemCreatePage() {
       memory_limit_mb: memoryLimit,
       problem_type: problemType,
       points: points === '' ? null : Number(points),
+      tags: tags.map((t) => t.id),
     });
   };
 
@@ -204,6 +208,15 @@ export function ProblemCreatePage() {
             className="w-full rounded-lg border border-border bg-panel px-3 py-2 text-sm text-text outline-none focus:border-accent"
             placeholder="100"
           />
+        </div>
+
+        <div>
+          <label className="mb-1 block text-sm font-medium text-text-muted">Tags</label>
+          <TagEditor value={tags} onChange={setTags} />
+        </div>
+
+        <div className="rounded-lg border border-border bg-panel-muted/40 px-3 py-2 text-xs text-text-muted">
+          New problems are created as <span className="font-medium text-text">drafts</span> and are hidden from students. Use the <span className="font-medium text-text">Publish</span> button on the next screen to make it visible.
         </div>
 
         <div className="flex justify-end">

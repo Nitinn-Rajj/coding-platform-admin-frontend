@@ -75,7 +75,7 @@ export function TestingTab({ problemId }: Props) {
             <option value="">Select a solution...</option>
             {solutions.map((s) => (
               <option key={s.id} value={s.id}>
-                {s.name} ({s.solution_type ?? 'main'})
+                {s.name} ({s.tag ?? 'main'})
               </option>
             ))}
           </select>
