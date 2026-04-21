@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils';
 import { isoToLocalInput, localInputToISO } from '@/lib/datetime';
 import {
   ArrowLeft, Save, Plus, Trash2, Globe, CheckCircle, Settings,
-  Shield, FileDown, ListChecks, AlertCircle,
+  Shield, ShieldAlert, FileDown, ListChecks, AlertCircle,
 } from 'lucide-react';
 import type {
   Contest, ContestProblem, Group,
@@ -14,8 +14,9 @@ import type {
   Problem, PaginatedResponse,
 } from '@/types';
 import { useAuthStore } from '@/features/auth/store';
+import { PlagCheckTab } from '../components/PlagCheckTab';
 
-type Tab = 'settings' | 'problems' | 'proctor';
+type Tab = 'settings' | 'problems' | 'proctor' | 'plag';
 
 export function ContestEditorPage() {
   const { id } = useParams<{ id: string }>();
@@ -219,6 +220,9 @@ export function ContestEditorPage() {
             <Shield size={14} className="mr-1 inline" /> Proctoring
           </TabButton>
         )}
+        <TabButton active={activeTab === 'plag'} onClick={() => setActiveTab('plag')}>
+          <ShieldAlert size={14} className="mr-1 inline" /> Plag Check
+        </TabButton>
       </div>
 
       {activeTab === 'settings' && (
@@ -478,6 +482,10 @@ export function ContestEditorPage() {
 
       {activeTab === 'proctor' && contest.proctored && (
         <ProctorPanel contestId={contest.id} />
+      )}
+
+      {activeTab === 'plag' && (
+        <PlagCheckTab contestId={contest.id} contestTitle={contest.title} />
       )}
     </div>
   );
