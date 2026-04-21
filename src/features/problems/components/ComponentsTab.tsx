@@ -4,6 +4,7 @@ import { apiClient } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
 import { Plus, Trash2, Save, Play, Check, X, Code2 } from 'lucide-react';
 import type { CheckerType, ComponentType, ProblemComponent, SolutionTag } from '@/types';
+import { CodeEditor } from '@/components/CodeEditor';
 
 interface Props {
   problemId: string;
@@ -236,12 +237,12 @@ export function ComponentsTab({ problemId, type }: Props) {
           )}
           <div>
             <label className="mb-1 block text-xs text-text-muted">Source Code (C++)</label>
-            <textarea
+            <CodeEditor
               value={newCode}
-              onChange={(e) => setNewCode(e.target.value)}
-              rows={12}
-              className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-xs text-text font-mono outline-none focus:border-accent"
-              placeholder="#include <bits/stdc++.h>&#10;using namespace std;&#10;&#10;int main() {&#10;    &#10;}"
+              onChange={setNewCode}
+              language="cpp"
+              height={320}
+              placeholder={'#include <bits/stdc++.h>\nusing namespace std;\n\nint main() {\n    \n}'}
             />
           </div>
           <button
@@ -358,11 +359,11 @@ export function ComponentsTab({ problemId, type }: Props) {
                     onChange={(e) => setEditName(e.target.value)}
                     className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm text-text outline-none focus:border-accent"
                   />
-                  <textarea
+                  <CodeEditor
                     value={editCode}
-                    onChange={(e) => setEditCode(e.target.value)}
-                    rows={14}
-                    className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-xs text-text font-mono outline-none focus:border-accent"
+                    onChange={setEditCode}
+                    language="cpp"
+                    height={380}
                   />
                   <div className="flex justify-end gap-2">
                     <button
