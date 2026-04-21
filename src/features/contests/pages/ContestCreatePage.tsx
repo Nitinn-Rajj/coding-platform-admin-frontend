@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
+import { localInputToISO } from '@/lib/datetime';
 import { ArrowLeft, Save } from 'lucide-react';
 import type { Group } from '@/types';
 
@@ -49,8 +50,8 @@ export function ContestCreatePage() {
       title,
       description,
       scoring_type: scoringType,
-      start_time: new Date(startTime).toISOString(),
-      end_time: new Date(endTime).toISOString(),
+      start_time: localInputToISO(startTime),
+      end_time: localInputToISO(endTime),
       // Group contests are forced unrated server-side; reflect that here.
       is_rated: isGroupContest ? false : isRated,
       freeze_time_minutes: freezeMinutes > 0 ? freezeMinutes : null,

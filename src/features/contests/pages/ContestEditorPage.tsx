@@ -3,9 +3,10 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient, buildQueryString } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
+import { isoToLocalInput, localInputToISO } from '@/lib/datetime';
 import {
   ArrowLeft, Save, Plus, Trash2, Globe, CheckCircle, Settings,
-  Shield, FileDown, ListChecks,
+  Shield, FileDown, ListChecks, AlertCircle,
 } from 'lucide-react';
 import type {
   Contest, ContestProblem, Group,
@@ -23,6 +24,8 @@ export function ContestEditorPage() {
   const [addProblemId, setAddProblemId] = useState('');
   const [addMaxPoints, setAddMaxPoints] = useState(100);
   const [addScoringMode, setAddScoringMode] = useState<'all_or_nothing' | 'partial'>('all_or_nothing');
+  const [actionError, setActionError] = useState('');
+  const [actionSuccess, setActionSuccess] = useState('');
 
   const { data: contest, isLoading } = useQuery({
     queryKey: ['admin', 'contest', id],
@@ -30,37 +33,61 @@ export function ContestEditorPage() {
     enabled: !!id,
   });
 
+  const clearAction = () => { setActionError(''); setActionSuccess(''); };
+  const asMsg = (e: unknown) => (e instanceof Error ? e.message : 'Request failed');
+
   const updateMutation = useMutation({
     mutationFn: (payload: Record<string, unknown>) =>
       apiClient.put(`/admin/contests/${id}`, payload),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin', 'contest', id] }),
+    onMutate: clearAction,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'contest', id] });
+      setActionSuccess('Settings saved.');
+    },
+    onError: (e) => setActionError(asMsg(e)),
   });
 
   const publishMutation = useMutation({
     mutationFn: () => apiClient.post(`/admin/contests/${id}/publish`),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin', 'contest', id] }),
+    onMutate: clearAction,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'contest', id] });
+      queryClient.invalidateQueries({ queryKey: ['admin', 'contests'] });
+      setActionSuccess('Contest published — it is now visible to students.');
+    },
+    onError: (e) => setActionError(asMsg(e)),
   });
 
   const finalizeMutation = useMutation({
     mutationFn: () => apiClient.post(`/admin/contests/${id}/finalize`),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin', 'contest', id] }),
+    onMutate: clearAction,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'contest', id] });
+      queryClient.invalidateQueries({ queryKey: ['admin', 'contests'] });
+      setActionSuccess('Contest finalized — submissions are now locked.');
+    },
+    onError: (e) => setActionError(asMsg(e)),
   });
 
   const addProblemMutation = useMutation({
     mutationFn: (payload: {
       problem_id: number; max_points: number; problem_order: number; scoring_mode: string;
     }) => apiClient.post(`/admin/contests/${id}/problems`, payload),
+    onMutate: clearAction,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'contest', id] });
       setShowAddProblem(false);
       setAddProblemId('');
     },
+    onError: (e) => setActionError(asMsg(e)),
   });
 
   const removeProblemMutation = useMutation({
     mutationFn: (cpId: number) =>
       apiClient.delete(`/admin/contests/${id}/problems/${cpId}`),
+    onMutate: clearAction,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin', 'contest', id] }),
+    onError: (e) => setActionError(asMsg(e)),
   });
 
   const handleExportCSV = async () => {
@@ -88,6 +115,26 @@ export function ContestEditorPage() {
 
   return (
     <div className="space-y-4">
+      {(actionError || actionSuccess) && (
+        <div
+          className={cn(
+            'flex items-start gap-2 rounded-lg border px-3 py-2 text-sm',
+            actionError
+              ? 'border-error/30 bg-error/10 text-error'
+              : 'border-success/30 bg-success/10 text-success',
+          )}
+        >
+          {actionError ? <AlertCircle size={14} className="mt-0.5" /> : <CheckCircle size={14} className="mt-0.5" />}
+          <span className="flex-1">{actionError || actionSuccess}</span>
+          <button
+            onClick={() => { setActionError(''); setActionSuccess(''); }}
+            className="opacity-60 hover:opacity-100"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -154,7 +201,6 @@ export function ContestEditorPage() {
           contest={contest}
           onSave={(payload) => updateMutation.mutate(payload)}
           isPending={updateMutation.isPending}
-          isSuccess={updateMutation.isSuccess}
         />
       )}
 
@@ -293,17 +339,16 @@ function TabButton({
 
 /* ─── Contest Settings Form ─── */
 function ContestSettingsForm({
-  contest, onSave, isPending, isSuccess,
+  contest, onSave, isPending,
 }: {
   contest: Contest;
   onSave: (payload: Record<string, unknown>) => void;
   isPending: boolean;
-  isSuccess: boolean;
 }) {
   const [title, setTitle] = useState(contest.title);
   const [description, setDescription] = useState(contest.description ?? '');
-  const [startTime, setStartTime] = useState(contest.start_time.slice(0, 16));
-  const [endTime, setEndTime] = useState(contest.end_time.slice(0, 16));
+  const [startTime, setStartTime] = useState(isoToLocalInput(contest.start_time));
+  const [endTime, setEndTime] = useState(isoToLocalInput(contest.end_time));
   const [isRated, setIsRated] = useState(contest.is_rated);
   const [freezeMinutes, setFreezeMinutes] = useState(contest.freeze_time_minutes ?? 0);
   const [penaltySeconds, setPenaltySeconds] = useState(contest.penalty_time_seconds ?? 0);
@@ -325,8 +370,8 @@ function ContestSettingsForm({
     const payload: Record<string, unknown> = {
       title,
       description,
-      start_time: new Date(startTime).toISOString(),
-      end_time: new Date(endTime).toISOString(),
+      start_time: localInputToISO(startTime),
+      end_time: localInputToISO(endTime),
       is_rated: isGroupContest ? false : isRated,
       freeze_time_minutes: freezeMinutes > 0 ? freezeMinutes : null,
       penalty_time_seconds: penaltySeconds,
@@ -344,12 +389,6 @@ function ContestSettingsForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
-      {isSuccess && (
-        <div className="rounded-lg border border-success/30 bg-success/10 px-3 py-2 text-sm text-success">
-          Contest updated successfully.
-        </div>
-      )}
-
       <div>
         <label className="mb-1 block text-sm font-medium text-text-muted">Title</label>
         <input
