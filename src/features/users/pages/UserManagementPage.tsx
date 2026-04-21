@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
-import { Search, ChevronLeft, ChevronRight, Shield } from 'lucide-react';
+import { Search, ChevronLeft, ChevronRight, Shield, Ban, ShieldCheck } from 'lucide-react';
 import type { AdminUser, PaginatedResponse } from '@/types';
 
 const roleColors: Record<string, string> = {
@@ -38,6 +38,25 @@ export function UserManagementPage() {
     },
   });
 
+  const updateBanMutation = useMutation({
+    mutationFn: ({ userId, isBanned, reason }: { userId: number; isBanned: boolean; reason?: string }) =>
+      apiClient.put(`/admin/users/${userId}/ban`, { is_banned: isBanned, reason: reason ?? '' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
+    },
+  });
+
+  const toggleBan = (user: AdminUser) => {
+    if (user.is_banned) {
+      if (!confirm(`Unban ${user.username}?`)) return;
+      updateBanMutation.mutate({ userId: user.id, isBanned: false });
+      return;
+    }
+    const reason = prompt(`Ban ${user.username}? Add a reason for the audit log:`, '');
+    if (reason === null) return;
+    updateBanMutation.mutate({ userId: user.id, isBanned: true, reason });
+  };
+
   const users = data?.data ?? [];
   const total = data?.total ?? 0;
   const totalPages = Math.ceil(total / limit);
@@ -70,9 +89,13 @@ export function UserManagementPage() {
         </select>
       </div>
 
-      {updateRoleMutation.isError && (
+      {(updateRoleMutation.isError || updateBanMutation.isError) && (
         <div className="rounded-lg border border-error/30 bg-error/10 px-3 py-2 text-sm text-error">
-          {updateRoleMutation.error instanceof Error ? updateRoleMutation.error.message : 'Failed to update role'}
+          {updateRoleMutation.error instanceof Error
+            ? updateRoleMutation.error.message
+            : updateBanMutation.error instanceof Error
+              ? updateBanMutation.error.message
+              : 'Failed to update user'}
         </div>
       )}
 
@@ -87,24 +110,37 @@ export function UserManagementPage() {
               <th className="px-4 py-3 text-left font-medium text-text-muted">Role</th>
               <th className="px-4 py-3 text-left font-medium text-text-muted">Rating</th>
               <th className="px-4 py-3 text-left font-medium text-text-muted">Joined</th>
+              <th className="px-4 py-3 text-left font-medium text-text-muted">Status</th>
               <th className="px-4 py-3 text-right font-medium text-text-muted">Actions</th>
             </tr>
           </thead>
           <tbody>
             {isLoading && (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-text-muted">Loading...</td>
+                <td colSpan={8} className="px-4 py-8 text-center text-text-muted">Loading...</td>
               </tr>
             )}
             {!isLoading && users.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-text-muted">No users found</td>
+                <td colSpan={8} className="px-4 py-8 text-center text-text-muted">No users found</td>
               </tr>
             )}
             {users.map((u) => (
               <tr key={u.id} className="border-b border-border last:border-0">
                 <td className="px-4 py-3 text-text-muted">{u.id}</td>
-                <td className="px-4 py-3 font-medium text-text">{u.username}</td>
+                <td className="px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-text">{u.username}</span>
+                    {u.is_banned && (
+                      <span className="inline-flex rounded-full bg-error/15 px-2 py-0.5 text-[10px] font-medium text-error">
+                        banned
+                      </span>
+                    )}
+                  </div>
+                  {u.is_banned && u.ban_reason && (
+                    <p className="mt-1 max-w-xs truncate text-xs text-text-muted">{u.ban_reason}</p>
+                  )}
+                </td>
                 <td className="px-4 py-3 text-text-muted">{u.email}</td>
                 <td className="px-4 py-3">
                   {editingUserId === u.id ? (
@@ -143,16 +179,36 @@ export function UserManagementPage() {
                 <td className="px-4 py-3 text-text-muted">
                   {new Date(u.created_at).toLocaleDateString()}
                 </td>
-                <td className="px-4 py-3 text-right">
-                  {editingUserId !== u.id && (
-                    <button
-                      onClick={() => { setEditingUserId(u.id); setEditRole(u.role); }}
-                      className="flex items-center gap-1 rounded p-1.5 text-text-muted hover:bg-accent-subtle hover:text-accent"
-                      title="Change role"
-                    >
-                      <Shield size={14} />
-                    </button>
+                <td className="px-4 py-3">
+                  {u.is_banned ? (
+                    <span className="text-error">Banned</span>
+                  ) : (
+                    <span className="text-success">Active</span>
                   )}
+                </td>
+                <td className="px-4 py-3 text-right">
+                  <div className="flex justify-end gap-1">
+                    {editingUserId !== u.id && (
+                      <button
+                        onClick={() => { setEditingUserId(u.id); setEditRole(u.role); }}
+                        className="flex items-center gap-1 rounded p-1.5 text-text-muted hover:bg-accent-subtle hover:text-accent"
+                        title="Change role"
+                      >
+                        <Shield size={14} />
+                      </button>
+                    )}
+                    <button
+                      onClick={() => toggleBan(u)}
+                      disabled={updateBanMutation.isPending}
+                      className={cn(
+                        'rounded p-1.5 hover:bg-accent-subtle disabled:opacity-50',
+                        u.is_banned ? 'text-success hover:text-success' : 'text-text-muted hover:text-error',
+                      )}
+                      title={u.is_banned ? 'Unban user' : 'Ban user'}
+                    >
+                      {u.is_banned ? <ShieldCheck size={14} /> : <Ban size={14} />}
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}

@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils';
 import { isoToLocalInput, localInputToISO } from '@/lib/datetime';
 import {
   ArrowLeft, Save, Plus, Trash2, Globe, CheckCircle, Settings,
-  Shield, ShieldAlert, FileDown, ListChecks, AlertCircle,
+  Shield, ShieldAlert, FileDown, ListChecks, AlertCircle, RotateCcw,
 } from 'lucide-react';
 import type {
   Contest, ContestProblem, Group,
@@ -66,10 +66,27 @@ export function ContestEditorPage() {
   const finalizeMutation = useMutation({
     mutationFn: () => apiClient.post(`/admin/contests/${id}/finalize`),
     onMutate: clearAction,
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'contest', id] });
       queryClient.invalidateQueries({ queryKey: ['admin', 'contests'] });
-      setActionSuccess('Contest finalized — submissions are now locked.');
+      const results = (data as { results?: unknown[] })?.results;
+      setActionSuccess(
+        results
+          ? `Contest finalized — ratings applied for ${results.length} participant${results.length === 1 ? '' : 's'}.`
+          : 'Contest finalized — submissions are now locked.',
+      );
+    },
+    onError: (e) => setActionError(asMsg(e)),
+  });
+
+  const rerunRatingMutation = useMutation({
+    mutationFn: () => apiClient.post(`/admin/contests/${id}/rerun-rating`),
+    onMutate: clearAction,
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'contest', id] });
+      queryClient.invalidateQueries({ queryKey: ['admin', 'contests'] });
+      const results = (data as { results?: unknown[] })?.results ?? [];
+      setActionSuccess(`Ratings rerun for ${results.length} participant${results.length === 1 ? '' : 's'}.`);
     },
     onError: (e) => setActionError(asMsg(e)),
   });
@@ -202,6 +219,15 @@ export function ContestEditorPage() {
               className="flex items-center gap-1.5 rounded-lg border border-warning/30 bg-warning/10 px-3 py-1.5 text-sm font-medium text-warning hover:bg-warning/20 disabled:opacity-50"
             >
               <CheckCircle size={14} /> Finalize
+            </button>
+          )}
+          {contest.is_rated && contest.status === 'finalized' && (
+            <button
+              onClick={() => { if (confirm('Re-run rating for this contest?')) rerunRatingMutation.mutate(); }}
+              disabled={rerunRatingMutation.isPending}
+              className="flex items-center gap-1.5 rounded-lg border border-accent/30 bg-accent-subtle px-3 py-1.5 text-sm font-medium text-accent hover:bg-accent-subtle/70 disabled:opacity-50"
+            >
+              <RotateCcw size={14} /> Re-run rating
             </button>
           )}
         </div>

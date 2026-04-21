@@ -5,6 +5,7 @@ export interface AuthUser {
   email: string;
   role: string;
   rating: number;
+  is_banned?: boolean;
   created_at: string;
   can_access_admin?: boolean;
 }
@@ -15,6 +16,10 @@ export interface AdminUser {
   email: string;
   role: string;
   rating: number;
+  is_banned: boolean;
+  banned_at?: string | null;
+  banned_by?: number | null;
+  ban_reason?: string;
   created_at: string;
   submissions_count: number;
   problems_solved: number;

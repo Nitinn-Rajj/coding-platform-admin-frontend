@@ -42,7 +42,7 @@ interface Props {
 }
 
 export function PlagCheckTab({ contestId, contestTitle }: Props) {
-  const [thresholdPct, setThresholdPct] = useState(85);
+  const [thresholdPct, setThresholdPct] = useState(90);
   const [sortKey, setSortKey] = useState<'similarity' | 'problem' | 'user_a'>('similarity');
 
   const mutation = useMutation({
