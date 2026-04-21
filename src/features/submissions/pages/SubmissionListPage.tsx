@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { apiClient, buildQueryString } from '@/lib/api-client';
 import { ChevronLeft, ChevronRight, Lock, MessageSquare } from 'lucide-react';
 import type { AdminSubmissionSummary, PaginatedResponse, ProblemType, SubmissionStatus } from '@/types';
@@ -27,12 +27,32 @@ const STATUS_OPTIONS: Array<{ value: '' | SubmissionStatus; label: string }> = [
 
 export function SubmissionListPage() {
   const navigate = useNavigate();
-  const [page, setPage] = useState(1);
-  const [status, setStatus] = useState<'' | SubmissionStatus>('');
-  const [problemType, setProblemType] = useState<'' | ProblemType>('');
-  const [userIdFilter, setUserIdFilter] = useState('');
-  const [contestIdFilter, setContestIdFilter] = useState('');
-  const [lockedFilter, setLockedFilter] = useState<'' | 'true' | 'false'>('');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [page, setPage] = useState(() => Number(searchParams.get('page') || '1') || 1);
+  const [status, setStatus] = useState<'' | SubmissionStatus>(
+    () => (searchParams.get('status') as '' | SubmissionStatus) || '',
+  );
+  const [problemType, setProblemType] = useState<'' | ProblemType>(
+    () => (searchParams.get('problem_type') as '' | ProblemType) || '',
+  );
+  const [userIdFilter, setUserIdFilter] = useState(() => searchParams.get('user_id') || '');
+  const [contestIdFilter, setContestIdFilter] = useState(() => searchParams.get('contest_id') || '');
+  const [contestName, setContestName] = useState(() => searchParams.get('contest_name') || '');
+  const [lockedFilter, setLockedFilter] = useState<'' | 'true' | 'false'>(
+    () => (searchParams.get('locked') as '' | 'true' | 'false') || '',
+  );
+
+  useEffect(() => {
+    const nextParams = new URLSearchParams();
+    if (page > 1) nextParams.set('page', String(page));
+    if (status) nextParams.set('status', status);
+    if (problemType) nextParams.set('problem_type', problemType);
+    if (userIdFilter) nextParams.set('user_id', userIdFilter);
+    if (contestIdFilter) nextParams.set('contest_id', contestIdFilter);
+    if (lockedFilter) nextParams.set('locked', lockedFilter);
+    if (contestName && contestIdFilter) nextParams.set('contest_name', contestName);
+    setSearchParams(nextParams, { replace: true });
+  }, [contestIdFilter, contestName, lockedFilter, page, problemType, setSearchParams, status, userIdFilter]);
 
   const { data, isLoading } = useQuery({
     queryKey: ['admin', 'submissions', page, status, problemType, userIdFilter, contestIdFilter, lockedFilter],
@@ -58,7 +78,9 @@ export function SubmissionListPage() {
       <div>
         <h1 className="text-xl font-semibold text-text">Submissions</h1>
         <p className="text-sm text-text-muted">
-          View and grade all submissions across users, contests and problems.
+          {contestIdFilter
+            ? `Viewing solutions for contest #${contestIdFilter}${contestName ? ` · ${contestName}` : ''}.`
+            : 'View and grade all submissions across users, contests and problems.'}
         </p>
       </div>
 
@@ -91,7 +113,11 @@ export function SubmissionListPage() {
           <label className="block text-xs text-text-muted mb-1">Contest ID</label>
           <input
             value={contestIdFilter}
-            onChange={(e) => { setContestIdFilter(e.target.value); setPage(1); }}
+            onChange={(e) => {
+              setContestIdFilter(e.target.value);
+              setContestName('');
+              setPage(1);
+            }}
             type="number"
             className="w-28 rounded-lg border border-border bg-bg-secondary px-2 py-1.5 text-sm text-text outline-none focus:border-accent"
           />
@@ -143,7 +169,22 @@ export function SubmissionListPage() {
             {rows.map((s) => (
               <tr
                 key={s.id}
-                onClick={() => navigate(`/submissions/${s.id}`)}
+                onClick={() =>
+                  navigate(`/submissions/${s.id}`, {
+                    state: {
+                      backTo: `/submissions${buildQueryString({
+                        page: page > 1 ? page : undefined,
+                        status,
+                        problem_type: problemType,
+                        user_id: userIdFilter,
+                        contest_id: contestIdFilter,
+                        locked: lockedFilter,
+                        contest_name: contestName || undefined,
+                      })}`,
+                      backLabel: contestIdFilter ? 'Back to contest solutions' : 'Back to submissions',
+                    },
+                  })
+                }
                 className="border-b border-border last:border-0 cursor-pointer hover:bg-accent-subtle/30 transition-colors"
               >
                 <td className="px-4 py-3 text-text-muted font-mono text-xs">#{s.id}</td>

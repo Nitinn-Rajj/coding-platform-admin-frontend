@@ -173,6 +173,12 @@ export function ContestEditorPage() {
         </div>
         <div className="flex items-center gap-2">
           <button
+            onClick={() => navigate(`/submissions${buildQueryString({ contest_id: contest.id, contest_name: contest.title })}`)}
+            className="flex items-center gap-1.5 rounded-lg border border-border bg-panel px-3 py-1.5 text-sm text-text hover:bg-accent-subtle/50"
+          >
+            <ListChecks size={14} /> View submissions
+          </button>
+          <button
             onClick={handleExportCSV}
             className="flex items-center gap-1.5 rounded-lg border border-border bg-panel px-3 py-1.5 text-sm text-text hover:bg-accent-subtle/50"
           >

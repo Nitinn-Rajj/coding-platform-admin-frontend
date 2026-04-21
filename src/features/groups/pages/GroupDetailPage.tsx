@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
-import { apiClient } from '@/lib/api-client';
-import { ArrowLeft, Check, Pencil, Save, Trash2, UserPlus, X } from 'lucide-react';
-import type { Group, GroupJoinRequest, GroupMember } from '@/types';
+import { apiClient, buildQueryString } from '@/lib/api-client';
+import { ArrowLeft, Check, ExternalLink, Pencil, Save, Search, Trash2, UserPlus, X } from 'lucide-react';
+import type { AdminUser, Contest, Group, GroupJoinRequest, GroupMember, PaginatedResponse } from '@/types';
 import { useAuthStore } from '@/features/auth/store';
 
 interface GroupDetailResponse {
@@ -17,7 +17,7 @@ export function GroupDetailPage() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const isSiteAdmin = user?.role === 'admin';
-  const [tab, setTab] = useState<'overview' | 'members' | 'requests'>('overview');
+  const [tab, setTab] = useState<'overview' | 'contests' | 'members' | 'requests'>('overview');
 
   const { data, isLoading } = useQuery({
     queryKey: ['admin', 'group', id],
@@ -55,6 +55,7 @@ export function GroupDetailPage() {
 
       <div className="flex items-center gap-1 border-b border-border">
         <TabButton active={tab === 'overview'} onClick={() => setTab('overview')}>Overview</TabButton>
+        <TabButton active={tab === 'contests'} onClick={() => setTab('contests')}>Contests</TabButton>
         <TabButton active={tab === 'members'} onClick={() => setTab('members')}>
           Members ({members.length})
         </TabButton>
@@ -64,6 +65,7 @@ export function GroupDetailPage() {
       </div>
 
       {tab === 'overview' && <OverviewTab group={group} canManage={canManage} />}
+      {tab === 'contests' && <ContestsTab groupId={group.id} />}
       {tab === 'members' && <MembersTab groupId={group.id} members={members} canManage={canManage} />}
       {tab === 'requests' && canManage && <RequestsTab groupId={group.id} />}
     </div>
@@ -182,9 +184,24 @@ function MembersTab({
   canManage: boolean;
 }) {
   const queryClient = useQueryClient();
-  const [addUserId, setAddUserId] = useState('');
+  const [memberSearch, setMemberSearch] = useState('');
+  const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
   const [addRole, setAddRole] = useState<'member' | 'admin'>('member');
   const [actionError, setActionError] = useState<string | null>(null);
+  const existingMemberIds = new Set(members.map((member) => member.user_id));
+
+  const { data: userSearchData, isLoading: isSearchingUsers } = useQuery({
+    queryKey: ['admin', 'users', 'group-member-search', memberSearch],
+    queryFn: () =>
+      apiClient.get<PaginatedResponse<AdminUser>>(
+        `/admin/users${buildQueryString({ page: 1, search: memberSearch.trim() })}`,
+      ),
+    enabled: canManage && memberSearch.trim().length > 0,
+  });
+
+  const availableUsers = (userSearchData?.data ?? [])
+    .filter((user) => !existingMemberIds.has(user.id))
+    .slice(0, 8);
 
   const invalidateAll = () => {
     queryClient.invalidateQueries({ queryKey: ['admin', 'group', String(groupId)] });
@@ -194,7 +211,8 @@ function MembersTab({
     mutationFn: (p: { user_id: number; role: string }) => apiClient.post(`/admin/groups/${groupId}/members`, p),
     onSuccess: () => {
       invalidateAll();
-      setAddUserId('');
+      setMemberSearch('');
+      setSelectedUser(null);
       setActionError(null);
     },
     onError: (err: Error) => setActionError(err.message),
@@ -223,15 +241,51 @@ function MembersTab({
     <div className="space-y-4">
       {canManage && (
         <div className="rounded-xl border border-border bg-panel p-4 flex flex-wrap items-end gap-3">
-          <div>
-            <label className="block text-xs text-text-muted mb-1">User ID</label>
-            <input
-              value={addUserId}
-              onChange={(e) => setAddUserId(e.target.value)}
-              type="number"
-              placeholder="123"
-              className="w-32 rounded-lg border border-border bg-bg-secondary px-2 py-1.5 text-sm text-text outline-none focus:border-accent"
-            />
+          <div className="min-w-[280px] flex-1">
+            <label className="block text-xs text-text-muted mb-1">Find user</label>
+            <div className="relative">
+              <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+              <input
+                value={memberSearch}
+                onChange={(e) => {
+                  setMemberSearch(e.target.value);
+                  setSelectedUser(null);
+                }}
+                placeholder="Search by user ID or username"
+                className="w-full rounded-lg border border-border bg-bg-secondary py-2 pl-9 pr-3 text-sm text-text outline-none focus:border-accent"
+              />
+            </div>
+            {selectedUser ? (
+              <p className="mt-2 text-xs text-text-muted">
+                Selected: <span className="font-medium text-text">{selectedUser.username}</span> #{selectedUser.id}
+              </p>
+            ) : memberSearch.trim() !== '' ? (
+              <div className="mt-2 rounded-lg border border-border bg-bg-secondary">
+                {isSearchingUsers && (
+                  <p className="px-3 py-2 text-sm text-text-muted">Searching users...</p>
+                )}
+                {!isSearchingUsers && availableUsers.length === 0 && (
+                  <p className="px-3 py-2 text-sm text-text-muted">No matching users found</p>
+                )}
+                {!isSearchingUsers && availableUsers.map((user) => (
+                  <button
+                    key={user.id}
+                    onClick={() => {
+                      setSelectedUser(user);
+                      setMemberSearch(`${user.username} (#${user.id})`);
+                    }}
+                    className="flex w-full items-center justify-between border-b border-border px-3 py-2 text-left text-sm text-text last:border-0 hover:bg-accent-subtle/40"
+                  >
+                    <span className="font-medium">{user.username}</span>
+                    <span className="text-xs text-text-muted">#{user.id}</span>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-2 text-xs text-text-muted">
+                Start typing a user ID or username, then pick the matching user.
+              </p>
+            )}
           </div>
           <div>
             <label className="block text-xs text-text-muted mb-1">Role</label>
@@ -245,8 +299,11 @@ function MembersTab({
             </select>
           </div>
           <button
-            disabled={addMutation.isPending || !addUserId}
-            onClick={() => addMutation.mutate({ user_id: Number(addUserId), role: addRole })}
+            disabled={addMutation.isPending || !selectedUser}
+            onClick={() => {
+              if (!selectedUser) return;
+              addMutation.mutate({ user_id: selectedUser.id, role: addRole });
+            }}
             className="flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-bg hover:bg-accent-hover disabled:opacity-60 transition-colors"
           >
             <UserPlus size={14} /> Add member
@@ -317,6 +374,136 @@ function MembersTab({
           </tbody>
         </table>
       </div>
+    </div>
+  );
+}
+
+function ContestsTab({ groupId }: { groupId: number }) {
+  const navigate = useNavigate();
+  const [page, setPage] = useState(1);
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['admin', 'group', String(groupId), 'contents', page],
+    queryFn: () =>
+      apiClient.get<PaginatedResponse<Contest>>(
+        `/admin/contests${buildQueryString({ group_id: groupId, page })}`,
+      ),
+  });
+
+  const contests = data?.data ?? [];
+  const total = data?.total ?? 0;
+  const totalPages = data?.pages ?? 1;
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-xl border border-border bg-panel p-4">
+        <h2 className="text-sm font-medium text-text">Group contests</h2>
+        <p className="mt-1 text-sm text-text-muted">
+          View all contests attached to this group, open a contest, or jump straight to the submitted solutions for that contest.
+        </p>
+      </div>
+
+      <div className="overflow-x-auto rounded-xl border border-border">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-border bg-bg-secondary">
+              <th className="px-4 py-3 text-left font-medium text-text-muted">Contest</th>
+              <th className="px-4 py-3 text-left font-medium text-text-muted">Status</th>
+              <th className="px-4 py-3 text-left font-medium text-text-muted">Schedule</th>
+              <th className="px-4 py-3 text-left font-medium text-text-muted">Problems</th>
+              <th className="px-4 py-3 text-left font-medium text-text-muted">Participants</th>
+              <th className="px-4 py-3 text-right font-medium text-text-muted">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {isLoading && (
+              <tr>
+                <td colSpan={6} className="px-4 py-8 text-center text-text-muted">Loading contests...</td>
+              </tr>
+            )}
+            {!isLoading && contests.length === 0 && (
+              <tr>
+                <td colSpan={6} className="px-4 py-8 text-center text-text-muted">No contests added to this group yet</td>
+              </tr>
+            )}
+            {contests.map((contest) => (
+              <tr
+                key={contest.id}
+                onClick={() => navigate(`/contests/${contest.id}`)}
+                className="border-b border-border last:border-0 cursor-pointer hover:bg-accent-subtle/30 transition-colors"
+              >
+                <td className="px-4 py-3">
+                  <div className="font-medium text-text">{contest.title}</div>
+                  <div className="text-xs text-text-muted">
+                    {contest.scoring_type.toUpperCase()} · {contest.grade_visibility}
+                  </div>
+                </td>
+                <td className="px-4 py-3">
+                  <span className="inline-flex rounded-full bg-accent-subtle px-2 py-0.5 text-xs font-medium capitalize text-accent">
+                    {contest.status}
+                  </span>
+                </td>
+                <td className="px-4 py-3 text-text-muted whitespace-nowrap">
+                  {new Date(contest.start_time).toLocaleString()}
+                </td>
+                <td className="px-4 py-3 text-text-muted">{contest.problem_count}</td>
+                <td className="px-4 py-3 text-text-muted">{contest.participant_count}</td>
+                <td className="px-4 py-3">
+                  <div className="flex justify-end gap-2">
+                    <button
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        navigate(`/contests/${contest.id}`);
+                      }}
+                      className="rounded-lg border border-border px-2.5 py-1 text-xs font-medium text-text-muted hover:bg-accent-subtle hover:text-text transition-colors"
+                    >
+                      Open contest
+                    </button>
+                    <button
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        navigate(
+                          `/submissions${buildQueryString({
+                            contest_id: contest.id,
+                            contest_name: contest.title,
+                          })}`,
+                        );
+                      }}
+                      className="inline-flex items-center gap-1 rounded-lg bg-accent px-2.5 py-1 text-xs font-medium text-bg hover:bg-accent-hover transition-colors"
+                    >
+                      <ExternalLink size={12} /> View solutions
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-text-muted">
+            Page {page} of {totalPages} · {total} contests
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setPage((current) => Math.max(1, current - 1))}
+              disabled={page === 1}
+              className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-text-muted hover:bg-accent-subtle hover:text-text disabled:opacity-40"
+            >
+              Previous
+            </button>
+            <button
+              onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+              disabled={page === totalPages}
+              className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-text-muted hover:bg-accent-subtle hover:text-text disabled:opacity-40"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

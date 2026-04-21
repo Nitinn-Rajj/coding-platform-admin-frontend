@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { apiClient } from '@/lib/api-client';
 import { ArrowLeft, Lock, Play, Save, Unlock } from 'lucide-react';
 import Editor from '@monaco-editor/react';
@@ -19,7 +19,11 @@ interface SandboxResult {
 export function SubmissionDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const queryClient = useQueryClient();
+  const navigationState = location.state as { backTo?: string; backLabel?: string } | null;
+  const backTo = navigationState?.backTo || '/submissions';
+  const backLabel = navigationState?.backLabel || 'Back to submissions';
 
   const { data: submission, isLoading } = useQuery({
     queryKey: ['admin', 'submission', id],
@@ -107,10 +111,10 @@ export function SubmissionDetailPage() {
   return (
     <div className="space-y-4">
       <button
-        onClick={() => navigate('/submissions')}
+        onClick={() => navigate(backTo)}
         className="flex items-center gap-2 text-sm text-text-muted hover:text-text transition-colors"
       >
-        <ArrowLeft size={14} /> Back to submissions
+        <ArrowLeft size={14} /> {backLabel}
       </button>
 
       <div className="flex flex-wrap items-start justify-between gap-3">
