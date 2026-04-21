@@ -24,10 +24,13 @@ interface NavItem {
   to: string;
   icon: ReactNode;
   roles?: string[];
+  globalOnly?: boolean;
 }
 
+const GLOBAL_ADMIN_ROLES = ['admin', 'setter', 'tester'];
+
 const navItems: NavItem[] = [
-  { label: 'Dashboard', to: '/', icon: <LayoutDashboard size={18} /> },
+  { label: 'Dashboard', to: '/', icon: <LayoutDashboard size={18} />, globalOnly: true },
   { label: 'Problems', to: '/problems', icon: <FileText size={18} /> },
   { label: 'Contests', to: '/contests', icon: <Trophy size={18} /> },
   { label: 'Groups', to: '/groups', icon: <UsersRound size={18} /> },
@@ -70,6 +73,7 @@ function Sidebar() {
   const navigate = useNavigate();
   const { user, logout } = useAuthStore();
   const [collapsed, setCollapsed] = useState(false);
+  const isGlobalAdmin = !!user && GLOBAL_ADMIN_ROLES.includes(user.role);
 
   const handleLogout = async () => {
     await logout();
@@ -77,7 +81,10 @@ function Sidebar() {
   };
 
   const visibleItems = navItems.filter(
-    (item) => !item.roles || (user && item.roles.includes(user.role)),
+    (item) => {
+      if (item.globalOnly && !isGlobalAdmin) return false;
+      return !item.roles || (user && item.roles.includes(user.role));
+    },
   );
 
   return (

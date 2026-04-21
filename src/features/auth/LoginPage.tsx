@@ -4,6 +4,8 @@ import { useAuthStore } from '@/features/auth/store';
 import { cn } from '@/lib/utils';
 import { Lock, User, AlertCircle, Shield } from 'lucide-react';
 
+const ADMIN_ROLES = ['admin', 'setter', 'tester'];
+
 export function LoginPage() {
   const [loginId, setLoginId] = useState('');
   const [password, setPassword] = useState('');
@@ -17,8 +19,9 @@ export function LoginPage() {
     setError('');
     setLoading(true);
     try {
-      await login(loginId, password);
-      navigate('/');
+      const user = await login(loginId, password);
+      const isGlobalAdmin = ADMIN_ROLES.includes(user.role);
+      navigate(isGlobalAdmin ? '/' : '/groups');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed');
     } finally {

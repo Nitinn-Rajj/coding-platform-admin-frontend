@@ -2,6 +2,8 @@ import { Navigate, Outlet } from 'react-router-dom';
 import { useAuthStore } from '@/features/auth/store';
 
 const ADMIN_ROLES = ['admin', 'setter', 'tester'];
+const canUseAdminSite = (role: string, canAccessAdmin?: boolean) =>
+  ADMIN_ROLES.includes(role) || canAccessAdmin === true;
 
 interface ProtectedRouteProps {
   requiredRoles?: string[];
@@ -22,7 +24,7 @@ export function ProtectedRoute({ requiredRoles }: ProtectedRouteProps) {
     return <Navigate to="/login" replace />;
   }
 
-  if (!ADMIN_ROLES.includes(user.role)) {
+  if (!canUseAdminSite(user.role, user.can_access_admin)) {
     return <Navigate to="/login" replace />;
   }
 

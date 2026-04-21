@@ -10,18 +10,19 @@ export function GroupListPage() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const isSiteAdmin = user?.role === 'admin';
+  const isGlobalAdmin = user ? ['admin', 'setter', 'tester'].includes(user.role) : false;
   const [search, setSearch] = useState('');
   const [onlyMine, setOnlyMine] = useState(false);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['admin', 'groups', search, onlyMine],
+    queryKey: ['admin', 'groups', search, onlyMine, isGlobalAdmin],
     queryFn: () =>
       apiClient.get<{ groups: Group[] }>(
-        `/groups${buildQueryString({ search, member: onlyMine ? 'me' : undefined })}`,
+        `/groups${buildQueryString({ search, member: (!isGlobalAdmin || onlyMine) ? 'me' : undefined })}`,
       ),
   });
 
-  const groups = data?.groups ?? [];
+  const groups = (data?.groups ?? []).filter((group) => isGlobalAdmin || group.my_role === 'admin');
 
   return (
     <div className="space-y-4">
@@ -57,9 +58,10 @@ export function GroupListPage() {
             type="checkbox"
             checked={onlyMine}
             onChange={(e) => setOnlyMine(e.target.checked)}
+            disabled={!isGlobalAdmin}
             className="rounded border-border bg-panel accent-accent"
           />
-          My groups only
+          {isGlobalAdmin ? 'My groups only' : 'Managed groups'}
         </label>
       </div>
 

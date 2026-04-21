@@ -6,6 +6,7 @@ export interface AuthUser {
   role: string;
   rating: number;
   created_at: string;
+  can_access_admin?: boolean;
 }
 
 export interface AdminUser {

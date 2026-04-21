@@ -13,6 +13,7 @@ import type {
   ProctorEvent, ProctorUserSummary,
   Problem, PaginatedResponse,
 } from '@/types';
+import { useAuthStore } from '@/features/auth/store';
 
 type Tab = 'settings' | 'problems' | 'proctor';
 
@@ -506,6 +507,8 @@ function ContestSettingsForm({
   onSave: (payload: Record<string, unknown>) => void;
   isPending: boolean;
 }) {
+  const { user } = useAuthStore();
+  const isGlobalAdmin = user ? ['admin', 'setter', 'tester'].includes(user.role) : false;
   const [title, setTitle] = useState(contest.title);
   const [description, setDescription] = useState(contest.description ?? '');
   const [startTime, setStartTime] = useState(isoToLocalInput(contest.start_time));
@@ -519,10 +522,13 @@ function ContestSettingsForm({
   const [gradeVisibility, setGradeVisibility] = useState<'private' | 'group'>(contest.grade_visibility);
 
   const { data: groupsData } = useQuery({
-    queryKey: ['admin', 'groups-options'],
-    queryFn: () => apiClient.get<{ groups: Group[] }>(`/groups`),
+    queryKey: ['admin', 'groups-options', isGlobalAdmin],
+    queryFn: () =>
+      apiClient.get<{ groups: Group[] }>(
+        isGlobalAdmin ? '/groups' : '/groups?member=me',
+      ),
   });
-  const groups = groupsData?.groups ?? [];
+  const groups = (groupsData?.groups ?? []).filter((group) => isGlobalAdmin || group.my_role === 'admin');
 
   const isGroupContest = groupId !== '';
 
@@ -540,6 +546,9 @@ function ContestSettingsForm({
       proctored,
       grade_visibility: gradeVisibility,
     };
+    if (!isGlobalAdmin && groupId === '') {
+      return;
+    }
     if (groupId === '') {
       payload.clear_group = true;
     } else {
@@ -614,14 +623,15 @@ function ContestSettingsForm({
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="mb-1 block text-sm font-medium text-text-muted">
-            Associate with Group
+            Associate with Group {isGlobalAdmin ? '' : '(required)'}
           </label>
           <select
             value={groupId}
             onChange={(e) => setGroupId(e.target.value)}
+            required={!isGlobalAdmin}
             className="w-full rounded-lg border border-border bg-panel px-3 py-2 text-sm text-text outline-none focus:border-accent"
           >
-            <option value="">— None (global contest) —</option>
+            {isGlobalAdmin && <option value="">— None (global contest) —</option>}
             {groups.map((g) => (
               <option key={g.id} value={g.id}>
                 {g.name}

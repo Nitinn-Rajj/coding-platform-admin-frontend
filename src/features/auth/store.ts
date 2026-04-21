@@ -3,12 +3,14 @@ import { API_URL } from '@/config/env';
 import type { AuthUser } from '@/types';
 
 const ADMIN_ROLES = ['admin', 'setter', 'tester'];
+const canUseAdminSite = (user: AuthUser) =>
+  ADMIN_ROLES.includes(user.role) || user.can_access_admin === true;
 
 interface AuthState {
   user: AuthUser | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (loginId: string, password: string) => Promise<void>;
+  login: (loginId: string, password: string) => Promise<AuthUser>;
   logout: () => Promise<void>;
   restoreSession: () => Promise<void>;
 }
@@ -31,13 +33,18 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
 
     const data = await res.json();
+    const user: AuthUser = {
+      ...data.user,
+      can_access_admin: data.can_access_admin ?? data.user?.can_access_admin,
+    };
 
-    if (!ADMIN_ROLES.includes(data.user.role)) {
-      throw new Error('Access denied. Admin, setter, or tester role required.');
+    if (!canUseAdminSite(user)) {
+      throw new Error('Access denied. You must be a site admin role or a group admin.');
     }
 
     localStorage.setItem('admin_token', data.token);
-    set({ user: data.user, isAuthenticated: true, isLoading: false });
+    set({ user, isAuthenticated: true, isLoading: false });
+    return user;
   },
 
   logout: async () => {
@@ -67,7 +74,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       });
       if (res.ok) {
         const user: AuthUser = await res.json();
-        if (ADMIN_ROLES.includes(user.role)) {
+        if (canUseAdminSite(user)) {
           set({ user, isAuthenticated: true, isLoading: false });
         } else {
           localStorage.removeItem('admin_token');

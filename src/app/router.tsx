@@ -1,4 +1,4 @@
-import { createBrowserRouter, RouterProvider } from 'react-router-dom';
+import { createBrowserRouter, Navigate, RouterProvider } from 'react-router-dom';
 import { AdminLayout } from '@/layouts/AdminLayout';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { LoginPage } from '@/features/auth/LoginPage';
@@ -16,6 +16,19 @@ import { SubmissionListPage } from '@/features/submissions/pages/SubmissionListP
 import { SubmissionDetailPage } from '@/features/submissions/pages/SubmissionDetailPage';
 import { UserManagementPage } from '@/features/users/pages/UserManagementPage';
 import { AuditLogPage } from '@/features/audit/pages/AuditLogPage';
+import { useAuthStore } from '@/features/auth/store';
+
+const GLOBAL_ADMIN_ROLES = ['admin', 'setter', 'tester'];
+
+function HomeRoute() {
+  const user = useAuthStore((state) => state.user);
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+  return GLOBAL_ADMIN_ROLES.includes(user.role)
+    ? <DashboardPage />
+    : <Navigate to="/groups" replace />;
+}
 
 const router = createBrowserRouter([
   // Public route
@@ -30,7 +43,7 @@ const router = createBrowserRouter([
       {
         element: <AdminLayout />,
         children: [
-          { path: '/', element: <DashboardPage /> },
+          { path: '/', element: <HomeRoute /> },
           // Problems
           { path: '/problems', element: <ProblemListPage /> },
           { path: '/problems/new', element: <ProblemCreatePage /> },
@@ -42,15 +55,20 @@ const router = createBrowserRouter([
           { path: '/contests/:id', element: <ContestEditorPage /> },
           // Groups
           { path: '/groups', element: <GroupListPage /> },
-          { path: '/groups/new', element: <GroupCreatePage /> },
           { path: '/groups/:id', element: <GroupDetailPage /> },
           // Submissions
           { path: '/submissions', element: <SubmissionListPage /> },
           { path: '/submissions/:id', element: <SubmissionDetailPage /> },
-          // Users (admin only)
-          { path: '/users', element: <UserManagementPage /> },
-          // Audit log (admin only)
-          { path: '/audit-log', element: <AuditLogPage /> },
+          {
+            element: <ProtectedRoute requiredRoles={['admin']} />,
+            children: [
+              // Users (admin only)
+              { path: '/groups/new', element: <GroupCreatePage /> },
+              { path: '/users', element: <UserManagementPage /> },
+              // Audit log (admin only)
+              { path: '/audit-log', element: <AuditLogPage /> },
+            ],
+          },
         ],
       },
     ],
